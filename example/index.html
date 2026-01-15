@@ -696,8 +696,46 @@
         </section>
     </main>
 
-    <footer>
-        <!-- Footer will be added in footer-1 task -->
+    <!-- Final CTA Section -->
+    <section id="cta" class="py-20 bg-gradient-to-br from-indigo-600 to-indigo-800">
+        <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <h2 class="text-3xl sm:text-4xl font-bold text-white">Ready to orchestrate your AI agents?</h2>
+            <p class="mt-4 text-lg text-indigo-100">Join the waitlist and be the first to know when we launch.</p>
+
+            <form class="mt-8 flex flex-col sm:flex-row gap-4 max-w-md mx-auto">
+                <label for="email" class="sr-only">Email address</label>
+                <input type="email" id="email" name="email" placeholder="Enter your email" required class="flex-1 px-4 py-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder-indigo-200 focus:outline-none focus:ring-2 focus:ring-white focus:border-transparent">
+                <button type="submit" class="px-6 py-3 bg-white text-indigo-700 font-medium rounded-lg hover:bg-indigo-50 transition-colors focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-indigo-600" data-cta="book-demo">
+                    Book a Demo
+                </button>
+            </form>
+
+            <p class="mt-4 text-sm text-indigo-200">No spam. Unsubscribe anytime.</p>
+        </div>
+    </section>
+
+    <footer class="bg-slate-900 py-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex flex-col md:flex-row items-center justify-between gap-6">
+                <!-- Logo and Branding -->
+                <div class="flex items-center gap-2">
+                    <svg class="w-8 h-8 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+                    </svg>
+                    <span class="font-bold text-lg text-white">AgentOrch</span>
+                </div>
+
+                <!-- Footer Links -->
+                <nav class="flex items-center gap-6">
+                    <a href="#" class="text-slate-400 hover:text-white transition-colors text-sm">Privacy</a>
+                    <a href="#" class="text-slate-400 hover:text-white transition-colors text-sm">Terms</a>
+                    <a href="#" class="text-slate-400 hover:text-white transition-colors text-sm">Contact</a>
+                </nav>
+
+                <!-- Copyright -->
+                <p class="text-slate-500 text-sm">&copy; 2026 AgentOrch. All rights reserved.</p>
+            </div>
+        </div>
     </footer>
 
     <script>
