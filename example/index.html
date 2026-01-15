@@ -99,7 +99,114 @@
     </header>
 
     <main>
-        <!-- Hero section will be added in hero-1 task -->
+        <!-- Hero Section -->
+        <section id="hero" class="pt-24 pb-16 lg:pt-32 lg:pb-24 bg-gradient-to-br from-slate-50 via-white to-indigo-50">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+                    <!-- Hero Content -->
+                    <div class="text-center lg:text-left">
+                        <h1 class="text-4xl sm:text-5xl lg:text-6xl font-bold text-slate-900 leading-tight">
+                            Orchestrate AI agents like a high-performing team.
+                        </h1>
+                        <p class="mt-6 text-lg sm:text-xl text-slate-600 max-w-2xl mx-auto lg:mx-0">
+                            Plan, assign, execute, verify. One workflow, many specialized agents.
+                        </p>
+                        <div class="mt-10 flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
+                            <a href="#cta" class="inline-flex items-center justify-center px-6 py-3 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 shadow-lg shadow-indigo-200" data-cta="request-access">
+                                Request Access
+                            </a>
+                            <a href="#how-it-works" class="inline-flex items-center justify-center px-6 py-3 bg-white text-slate-700 font-medium rounded-lg hover:bg-slate-50 transition-colors border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2" data-cta="view-demo">
+                                View Demo Flow
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Dashboard Mockup -->
+                    <div class="relative">
+                        <div class="bg-white rounded-xl shadow-2xl shadow-slate-200 border border-slate-200 overflow-hidden">
+                            <!-- Dashboard Header -->
+                            <div class="bg-slate-800 px-4 py-3 flex items-center gap-2">
+                                <div class="flex gap-1.5">
+                                    <div class="w-3 h-3 rounded-full bg-red-500"></div>
+                                    <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+                                    <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                                </div>
+                                <span class="text-slate-400 text-sm font-mono ml-2">orchestrator-dashboard</span>
+                            </div>
+
+                            <!-- Dashboard Content -->
+                            <div class="p-4 bg-slate-50">
+                                <!-- Run Header -->
+                                <div class="flex items-center justify-between mb-4">
+                                    <div class="flex items-center gap-2">
+                                        <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                                        <span class="text-sm font-medium text-slate-700">Run #247</span>
+                                        <span class="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full">Active</span>
+                                    </div>
+                                    <span class="text-xs text-slate-500 font-mono">2m 34s</span>
+                                </div>
+
+                                <!-- Task Cards -->
+                                <div class="space-y-3">
+                                    <!-- Task 1: Completed -->
+                                    <div class="bg-white rounded-lg border border-slate-200 p-3">
+                                        <div class="flex items-center justify-between">
+                                            <div class="flex items-center gap-2">
+                                                <svg class="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                </svg>
+                                                <span class="text-sm font-medium text-slate-800">Parse requirements</span>
+                                            </div>
+                                            <span class="text-xs px-2 py-0.5 bg-slate-100 text-slate-600 rounded font-mono">planner-agent</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Task 2: In Progress -->
+                                    <div class="bg-white rounded-lg border-2 border-indigo-300 p-3 shadow-sm">
+                                        <div class="flex items-center justify-between">
+                                            <div class="flex items-center gap-2">
+                                                <svg class="w-5 h-5 text-indigo-500 animate-spin" fill="none" viewBox="0 0 24 24">
+                                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                </svg>
+                                                <span class="text-sm font-medium text-slate-800">Generate API endpoints</span>
+                                            </div>
+                                            <span class="text-xs px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded font-mono">coder-agent</span>
+                                        </div>
+                                        <div class="mt-2 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                            <div class="h-full bg-indigo-500 rounded-full w-3/5"></div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Task 3: Pending -->
+                                    <div class="bg-white rounded-lg border border-slate-200 p-3 opacity-60">
+                                        <div class="flex items-center justify-between">
+                                            <div class="flex items-center gap-2">
+                                                <div class="w-5 h-5 rounded-full border-2 border-slate-300"></div>
+                                                <span class="text-sm font-medium text-slate-600">Run test suite</span>
+                                            </div>
+                                            <span class="text-xs px-2 py-0.5 bg-slate-100 text-slate-500 rounded font-mono">qa-agent</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Task 4: Pending -->
+                                    <div class="bg-white rounded-lg border border-slate-200 p-3 opacity-60">
+                                        <div class="flex items-center justify-between">
+                                            <div class="flex items-center gap-2">
+                                                <div class="w-5 h-5 rounded-full border-2 border-slate-300"></div>
+                                                <span class="text-sm font-medium text-slate-600">Deploy to staging</span>
+                                            </div>
+                                            <span class="text-xs px-2 py-0.5 bg-slate-100 text-slate-500 rounded font-mono">deploy-agent</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <!-- Features section will be added in features-1 task -->
         <!-- How It Works section will be added in workflow-1 task -->
         <!-- Pricing section will be added in pricing-1 task -->
