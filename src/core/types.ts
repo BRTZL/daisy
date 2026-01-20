@@ -1,5 +1,5 @@
 /**
- * Shared types for Ralph Looper
+ * Shared types for Daisy
  */
 
 // Task status from tasks.json
@@ -8,7 +8,7 @@ export type TaskStatus = "pending" | "passed" | "skipped";
 // Section status from tasks.json
 export type SectionStatus = "pending" | "completed" | "partial";
 
-// Phase from status.json
+// Phase for tracking current loop state
 export type Phase =
   | "selecting"
   | "implementing"
@@ -39,16 +39,6 @@ export interface TasksFile {
   sections: Section[];
 }
 
-// Status file structure
-export interface StatusFile {
-  sectionId: number;
-  sectionName: string;
-  phase: Phase;
-  message: string;
-  itemsTotal: number;
-  itemsCompleted: number;
-}
-
 // Usage tracking
 export interface TokenUsage {
   inputTokens: number;
@@ -56,17 +46,6 @@ export interface TokenUsage {
   cacheCreateTokens: number;
   cacheReadTokens: number;
   costUsd: number;
-}
-
-// Progress snapshot
-export interface ProgressSnapshot {
-  sectionId: number | null;
-  sectionName: string;
-  phase: Phase;
-  message: string;
-  itemsTotal: number;
-  itemsCompleted: number;
-  timestamp: Date;
 }
 
 // Project configuration
@@ -123,4 +102,19 @@ export interface LoopRunnerEvents {
   output: (data: StreamMessage) => void;
   complete: () => void;
   error: (error: Error) => void;
+}
+
+/**
+ * Base interface for loop runners (LoopRunner and OpenLoopRunner)
+ * Both runners implement EventEmitter and have start/stop methods
+ */
+export interface BaseLoopRunner {
+  start(): Promise<void>;
+  stop(): void;
+  // biome-ignore lint/suspicious/noExplicitAny: EventEmitter requires flexible function types
+  on(event: string, listener: (...args: any[]) => void): this;
+  // biome-ignore lint/suspicious/noExplicitAny: EventEmitter requires flexible function types
+  off(event: string, listener: (...args: any[]) => void): this;
+  // biome-ignore lint/suspicious/noExplicitAny: EventEmitter requires flexible function types
+  emit(event: string, ...args: any[]): boolean;
 }

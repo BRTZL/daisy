@@ -3,8 +3,10 @@
  */
 
 export interface StreamMessage {
-  type: "init" | "assistant" | "result";
+  type: "init" | "assistant" | "result" | "system";
+  subtype?: "init" | "success" | "error";
   model?: string;
+  session_id?: string;
   message?: {
     content?: Array<{
       type: string;
@@ -28,6 +30,7 @@ export interface ParseResult {
   text?: string;
   toolName?: string;
   model?: string;
+  sessionId?: string;
   inputTokens: number;
   outputTokens: number;
   cacheCreateTokens: number;
@@ -63,7 +66,19 @@ export function parseLine(line: string): ParseResult | null {
     isComplete: false,
   };
 
+  // Extract session_id if present (available in init, assistant, and result messages)
+  if (msg.session_id) {
+    result.sessionId = msg.session_id;
+  }
+
   switch (msg.type) {
+    case "system":
+      // System init message contains session_id and model
+      if (msg.subtype === "init") {
+        result.model = msg.model;
+      }
+      break;
+
     case "init":
       result.model = msg.model;
       break;
@@ -89,6 +104,13 @@ export function parseLine(line: string): ParseResult | null {
       break;
 
     case "result":
+      // Debug: log raw result message to understand structure
+      if (process.env.DEBUG_PARSER) {
+        console.error(
+          "[parser] Raw result message:",
+          JSON.stringify(msg, null, 2)
+        );
+      }
       result.result = msg.result || "";
       result.inputTokens = msg.usage?.input_tokens || 0;
       result.outputTokens = msg.usage?.output_tokens || 0;
@@ -151,5 +173,17 @@ export class StreamParser {
    */
   clear(): void {
     this.buffer = "";
+  }
+
+  /**
+   * Flush any remaining data in the buffer (call when stream ends)
+   */
+  flush(): ParseResult | null {
+    if (this.buffer.trim()) {
+      const result = parseLine(this.buffer);
+      this.buffer = "";
+      return result;
+    }
+    return null;
   }
 }

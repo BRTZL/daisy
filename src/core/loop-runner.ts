@@ -1,19 +1,47 @@
 /**
- * Ralph Loop Runner - Manages continuous AI development loops with Claude Code
+ * Daisy Loop Runner - Manages continuous AI development loops with Claude Code
  */
 
 import { type ChildProcess, spawn } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { existsSync, readFileSync } from "node:fs";
+import {
+  existsSync,
+  type FSWatcher,
+  mkdirSync,
+  readFileSync,
+  unlinkSync,
+  watch,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
+
+import {
+  flattenTasks,
+  getNextTask,
+  getTaskStats,
+  getTasks,
+} from "../storage/project.js";
+import {
+  FILES,
+  type Signal,
+  type Task,
+  type WebhookConfig,
+} from "../storage/types.js";
 import { type ParseResult, StreamParser } from "./parser.js";
 import type { TokenUsage } from "./types.js";
+import {
+  createWebhookService,
+  type WebhookService,
+} from "./webhook-service.js";
 
 export interface LoopRunnerOptions {
   projectPath: string;
+  projectName: string;
   maxIterations: number;
   promptPath?: string;
   startingIteration?: number;
+  /** Webhook configurations for event notifications */
+  webhooks?: WebhookConfig[];
   onIterationStart?: (iteration: number) => void;
   onIterationComplete?: (
     iteration: number,
@@ -22,18 +50,8 @@ export interface LoopRunnerOptions {
   ) => void;
   onIterationError?: (iteration: number, error: Error) => void;
   onOutput?: (data: ParseResult) => void;
-  onStatusUpdate?: (status: StatusFile) => void;
   onComplete?: () => void;
   onError?: (error: Error) => void;
-}
-
-export interface StatusFile {
-  sectionId: number;
-  sectionName: string;
-  phase: "selecting" | "implementing" | "testing" | "committing" | "done";
-  message: string;
-  itemsTotal: number;
-  itemsCompleted: number;
 }
 
 export class LoopRunner extends EventEmitter {
@@ -41,6 +59,7 @@ export class LoopRunner extends EventEmitter {
   private parser = new StreamParser();
   private options: LoopRunnerOptions;
   private projectPath: string;
+  private projectName: string;
   private maxIterations: number;
   private startingIteration: number;
   private isStopping = false;
@@ -51,23 +70,43 @@ export class LoopRunner extends EventEmitter {
     cacheReadTokens: 0,
     costUsd: 0,
   };
-  private statusCheckInterval: ReturnType<typeof setInterval> | null = null;
+  private webhookService: WebhookService | null = null;
+
+  // Track totals across all iterations
+  private totalTokens = { input: 0, output: 0 };
+  private totalCost = 0;
+  private totalIterations = 0;
 
   constructor(options: LoopRunnerOptions) {
     super();
     this.options = options;
     this.projectPath = options.projectPath;
+    this.projectName = options.projectName;
     this.maxIterations = options.maxIterations;
     this.startingIteration = options.startingIteration || 1;
+
+    // Initialize webhook service if webhooks are configured
+    this.webhookService = createWebhookService(
+      options.webhooks,
+      options.projectName,
+      options.projectPath
+    );
   }
 
   /**
-   * Start the Ralph loop
+   * Start the Daisy loop
    */
   async start(): Promise<void> {
-    console.log(`Starting Ralph loop: ${this.maxIterations} iterations`);
+    console.log(`Starting Daisy loop: ${this.maxIterations} iterations`);
     console.log(`Project: ${this.projectPath}`);
     console.log();
+
+    // Emit loop_started webhook
+    await this.webhookService?.emit("loop_started", {
+      maxIterations: this.maxIterations,
+    });
+
+    let allTasksComplete = false;
 
     for (
       let i = this.startingIteration;
@@ -82,9 +121,19 @@ export class LoopRunner extends EventEmitter {
       this.emit("iteration-start", i);
       this.options.onIterationStart?.(i);
 
+      // Emit iteration_started webhook
+      await this.webhookService?.emit("iteration_started", {
+        iteration: i,
+        maxIterations: this.maxIterations,
+      });
+
       const complete = await this.runIteration(i);
 
+      // Track total iterations
+      this.totalIterations++;
+
       if (complete) {
+        allTasksComplete = true;
         this.emit("complete");
         this.options.onComplete?.();
         console.log("\n✓ All tasks completed!");
@@ -101,6 +150,14 @@ export class LoopRunner extends EventEmitter {
         await this.sleep(2000); // 2 second pause between iterations
       }
     }
+
+    // Emit loop_completed webhook
+    await this.webhookService?.emit("loop_completed", {
+      totalIterations: this.totalIterations,
+      allTasksComplete,
+      totalTokens: this.totalTokens,
+      totalCost: this.totalCost,
+    });
 
     this.emit("done");
   }
@@ -126,24 +183,42 @@ export class LoopRunner extends EventEmitter {
       costUsd: 0,
     };
 
+    // Clear any existing signal file at the start of iteration
+    const signalPath = path.join(this.projectPath, ".daisy", FILES.signal);
+    if (existsSync(signalPath)) {
+      try {
+        unlinkSync(signalPath);
+      } catch {
+        // Ignore errors clearing signal file
+      }
+    }
+
     return new Promise((resolve) => {
-      // Determine prompt path
+      // Determine base prompt path
       const defaultPromptPath = path.join(
         this.projectPath,
-        ".ralph-looper",
+        ".daisy",
         "PROMPT.md"
       );
-      const promptPath = this.options.promptPath || defaultPromptPath;
+      const basePromptPath = this.options.promptPath || defaultPromptPath;
 
-      if (!existsSync(promptPath)) {
-        const error = new Error(`Prompt file not found: ${promptPath}`);
-        this.emit("error", error);
-        this.options.onError?.(error);
-        resolve(false);
-        return;
+      // Generate dynamic prompt with task context
+      const { promptPath, currentTask } = this.generateIterationPrompt(
+        iteration,
+        basePromptPath
+      );
+
+      // Log the current task being worked on
+      if (currentTask) {
+        console.log(
+          chalkCyan(`Current task: ${currentTask.id} - ${currentTask.title}`)
+        );
+      } else {
+        console.log(chalkYellow("No available tasks to work on"));
       }
 
       // Spawn Claude Code
+      // Permissions are managed via .claude/settings.json (created by daisy init)
       this.activeProcess = spawn(
         "claude",
         [
@@ -161,12 +236,64 @@ export class LoopRunner extends EventEmitter {
       );
 
       let complete = false;
+      let allComplete = false;
       let lastToolName = "";
+      let signalWatcher: FSWatcher | null = null;
 
-      // Start checking for status updates every 5 seconds
-      this.statusCheckInterval = setInterval(() => {
-        this.checkStatusUpdates();
-      }, 5000);
+      // Watch for signal file from MCP server
+      try {
+        const watchDir = path.join(this.projectPath, ".daisy");
+        signalWatcher = watch(watchDir, (_eventType, filename) => {
+          if (filename === FILES.signal && existsSync(signalPath)) {
+            try {
+              const content = readFileSync(signalPath, "utf-8");
+              const signal: Signal = JSON.parse(content);
+
+              // Emit event for TUI to refresh tasks
+              this.emit("tasks-updated", signal.data);
+
+              if (signal.action === "iteration_complete") {
+                const taskData = signal.data as { reason?: string } | undefined;
+                console.log(
+                  chalkGreen(
+                    `\n✓ Signal received: ${taskData?.reason || "iteration complete"}`
+                  )
+                );
+                complete = true;
+                // Gracefully terminate Claude process
+                if (this.activeProcess) {
+                  this.activeProcess.kill("SIGTERM");
+                }
+              } else if (signal.action === "all_complete") {
+                console.log(
+                  chalkGreen(`\n✓ Signal received: All tasks complete!`)
+                );
+                complete = true;
+                allComplete = true;
+                if (this.activeProcess) {
+                  this.activeProcess.kill("SIGTERM");
+                }
+              } else if (signal.action === "task_updated") {
+                const taskData = signal.data as
+                  | { taskTitle?: string; status?: string }
+                  | undefined;
+                console.log(
+                  chalkCyan(
+                    `\n→ Task updated: ${taskData?.taskTitle} -> ${taskData?.status}`
+                  )
+                );
+              }
+            } catch {
+              // Ignore parse errors during file write
+            }
+          }
+        });
+      } catch {
+        // Signal watching not critical, continue without it
+        console.log(
+          chalkYellow("Warning: Could not set up signal file watcher")
+        );
+      }
 
       // Parse stdout
       this.activeProcess.stdout?.on("data", (data: Buffer) => {
@@ -199,6 +326,15 @@ export class LoopRunner extends EventEmitter {
           if (result.type === "result") {
             complete = result.isComplete;
 
+            // Debug: log result message parsing
+            try {
+              writeFileSync(
+                "/tmp/daisy-runner-debug.log",
+                `[${new Date().toISOString()}] result parsed: tokens=${result.inputTokens}/${result.outputTokens}, cost=${result.totalCostUsd}\n`,
+                { flag: "a" }
+              );
+            } catch {}
+
             // Accumulate usage
             this.currentUsage.inputTokens += result.inputTokens;
             this.currentUsage.outputTokens += result.outputTokens;
@@ -228,14 +364,48 @@ export class LoopRunner extends EventEmitter {
       });
 
       // Handle completion
-      this.activeProcess.on("close", (code) => {
+      this.activeProcess.on("close", async (code) => {
         this.activeProcess = null;
 
-        // Clear status check interval
-        if (this.statusCheckInterval) {
-          clearInterval(this.statusCheckInterval);
-          this.statusCheckInterval = null;
+        // Flush any remaining data in the parser buffer (important for getting final result message)
+        const finalResult = this.parser.flush();
+        if (finalResult) {
+          this.emit("output", finalResult);
+          this.options.onOutput?.(finalResult);
+
+          if (finalResult.type === "result") {
+            complete = finalResult.isComplete;
+
+            // Accumulate usage from final result
+            this.currentUsage.inputTokens += finalResult.inputTokens;
+            this.currentUsage.outputTokens += finalResult.outputTokens;
+            this.currentUsage.cacheCreateTokens +=
+              finalResult.cacheCreateTokens;
+            this.currentUsage.cacheReadTokens += finalResult.cacheReadTokens;
+            this.currentUsage.costUsd += finalResult.totalCostUsd || 0;
+
+            // Display usage
+            console.log(
+              chalkGray(
+                `\nTokens: ${formatNumber(finalResult.inputTokens)} in, ${formatNumber(finalResult.outputTokens)} out`
+              )
+            );
+            if (complete) {
+              console.log(chalkGreen("\n✓ COMPLETE marker detected!"));
+            }
+          }
         }
+
+        // Close signal file watcher
+        if (signalWatcher) {
+          signalWatcher.close();
+          signalWatcher = null;
+        }
+
+        // Update totals
+        this.totalTokens.input += this.currentUsage.inputTokens;
+        this.totalTokens.output += this.currentUsage.outputTokens;
+        this.totalCost += this.currentUsage.costUsd;
 
         console.log(
           chalkBlue(`\nIteration ${iteration} ended (exit code: ${code})`)
@@ -249,22 +419,62 @@ export class LoopRunner extends EventEmitter {
           chalkGray(`Cost: $${this.currentUsage.costUsd.toFixed(4)}\n`)
         );
 
-        this.emit("iteration-complete", iteration, this.currentUsage, complete);
+        // Emit iteration_completed webhook
+        await this.webhookService?.emit("iteration_completed", {
+          iteration,
+          maxIterations: this.maxIterations,
+          tokens: {
+            input: this.currentUsage.inputTokens,
+            output: this.currentUsage.outputTokens,
+          },
+          cost: this.currentUsage.costUsd,
+          complete,
+        });
+
+        // Debug: log emitted values
+        try {
+          const { writeFileSync } = await import("node:fs");
+          writeFileSync(
+            "/tmp/daisy-runner-debug.log",
+            `[${new Date().toISOString()}] emit iteration-complete: iter=${iteration}, tokens=${this.currentUsage.inputTokens}/${this.currentUsage.outputTokens}, cost=${this.currentUsage.costUsd}, allComplete=${allComplete}\n`,
+            { flag: "a" }
+          );
+        } catch {}
+
+        this.emit(
+          "iteration-complete",
+          iteration,
+          this.currentUsage,
+          allComplete
+        );
         this.options.onIterationComplete?.(
           iteration,
           this.currentUsage,
-          complete
+          allComplete
         );
 
-        resolve(complete);
+        // Return allComplete (not complete) - complete means iteration done, allComplete means all tasks done
+        resolve(allComplete);
       });
 
       // Handle errors
-      this.activeProcess.on("error", (err) => {
+      this.activeProcess.on("error", async (err) => {
         this.activeProcess = null;
+
+        // Close signal file watcher
+        if (signalWatcher) {
+          signalWatcher.close();
+          signalWatcher = null;
+        }
+
         const error = new Error(`Failed to spawn claude: ${err.message}`);
         this.emit("error", error);
         this.options.onError?.(error);
+        // Emit error webhook
+        await this.webhookService?.emit("error", {
+          message: error.message,
+          iteration,
+        });
         resolve(false);
       });
 
@@ -290,10 +500,6 @@ export class LoopRunner extends EventEmitter {
    */
   stop(): void {
     this.isStopping = true;
-    if (this.statusCheckInterval) {
-      clearInterval(this.statusCheckInterval);
-      this.statusCheckInterval = null;
-    }
     if (this.activeProcess) {
       console.log(chalkYellow("\nKilling Claude process..."));
       this.activeProcess.kill("SIGKILL");
@@ -302,29 +508,145 @@ export class LoopRunner extends EventEmitter {
   }
 
   /**
-   * Check for status updates
-   */
-  private checkStatusUpdates(): void {
-    const statusPath = path.join(
-      this.projectPath,
-      ".ralph-looper",
-      "status.json"
-    );
-    if (existsSync(statusPath)) {
-      try {
-        const statusData = JSON.parse(readFileSync(statusPath, "utf-8"));
-        this.options.onStatusUpdate?.(statusData);
-      } catch (_err) {
-        // Ignore parsing errors
-      }
-    }
-  }
-
-  /**
    * Sleep for specified milliseconds
    */
   private sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Generate a dynamic prompt for the current iteration
+   * This includes task context so Claude knows exactly what to work on
+   */
+  private generateIterationPrompt(
+    iteration: number,
+    basePromptPath: string
+  ): { promptPath: string; currentTask: Task | null } {
+    // Read base prompt
+    const basePrompt = existsSync(basePromptPath)
+      ? readFileSync(basePromptPath, "utf-8")
+      : "";
+
+    // Get current task state
+    const currentTask = getNextTask(this.projectPath);
+    const tasks = getTasks(this.projectPath);
+    const stats = getTaskStats(this.projectPath);
+    const allTasks = flattenTasks(tasks);
+
+    // Categorize tasks
+    const completedTasks = allTasks.filter((t) => t.status === "completed");
+    const pendingTasks = allTasks.filter((t) => t.status === "pending");
+    const _inProgressTasks = allTasks.filter((t) => t.status === "in_progress");
+
+    // Build the dynamic prompt
+    let dynamicPrompt = `# Daisy Loop - Iteration ${iteration}
+
+## CRITICAL RULES - READ CAREFULLY
+
+**YOU MUST ONLY COMPLETE ONE TASK PER ITERATION.**
+
+This is iteration ${iteration}. You will be given ONE specific task to complete. Do NOT work on any other tasks. Do NOT implement features that belong to other tasks. After completing your assigned task, call \`signal_iteration_complete\` and STOP.
+
+---
+
+## Current Task Status
+
+- **Total tasks:** ${stats.total}
+- **Completed:** ${stats.completed}
+- **Pending:** ${stats.pending}
+- **In Progress:** ${stats.inProgress}
+
+`;
+
+    // Show completed tasks for context
+    if (completedTasks.length > 0) {
+      dynamicPrompt += `## Already Completed (DO NOT REDO)\n\n`;
+      for (const task of completedTasks) {
+        dynamicPrompt += `- [x] **${task.id}**: ${task.title}`;
+        if (task.completionSummary) {
+          dynamicPrompt += ` - ${task.completionSummary}`;
+        }
+        dynamicPrompt += "\n";
+      }
+      dynamicPrompt += "\n";
+    }
+
+    // Show the current task to work on
+    if (currentTask) {
+      dynamicPrompt += `## YOUR TASK FOR THIS ITERATION
+
+**Task ID:** \`${currentTask.id}\`
+**Title:** ${currentTask.title}
+`;
+      if (currentTask.description) {
+        dynamicPrompt += `**Description:** ${currentTask.description}\n`;
+      }
+      if (
+        currentTask.acceptanceCriteria &&
+        currentTask.acceptanceCriteria.length > 0
+      ) {
+        dynamicPrompt += `\n**Acceptance Criteria:**\n`;
+        for (const criterion of currentTask.acceptanceCriteria) {
+          dynamicPrompt += `- [ ] ${criterion}\n`;
+        }
+      }
+      if (currentTask.dependsOn && currentTask.dependsOn.length > 0) {
+        dynamicPrompt += `\n**Depends on:** ${currentTask.dependsOn.join(", ")}\n`;
+      }
+      dynamicPrompt += `
+### Instructions
+
+1. Call \`update_task_status\` to mark task \`${currentTask.id}\` as \`in_progress\`
+2. Complete ONLY this task - nothing more, nothing less
+3. When done, call \`update_task_status\` to mark it as \`completed\` with a summary
+4. Call \`signal_iteration_complete\` to end this iteration
+
+**DO NOT** implement any functionality that belongs to other tasks listed below.
+
+`;
+    } else {
+      dynamicPrompt += `## NO AVAILABLE TASKS
+
+All tasks are either completed, blocked, or have unmet dependencies.
+Call \`signal_iteration_complete\` with reason "No available tasks".
+
+`;
+    }
+
+    // Show remaining tasks (DO NOT DO THESE)
+    const remainingTasks = pendingTasks.filter((t) => t.id !== currentTask?.id);
+    if (remainingTasks.length > 0) {
+      dynamicPrompt += `## Remaining Tasks (DO NOT WORK ON THESE YET)
+
+These tasks will be handled in future iterations. Do NOT implement any of these now:
+
+`;
+      for (const task of remainingTasks) {
+        dynamicPrompt += `- [ ] **${task.id}**: ${task.title}\n`;
+      }
+      dynamicPrompt += "\n";
+    }
+
+    // Add the base prompt
+    dynamicPrompt += `---
+
+## Base Instructions
+
+${basePrompt}
+`;
+
+    // Write to temp file
+    const tempDir = path.join(this.projectPath, ".daisy", ".temp");
+    if (!existsSync(tempDir)) {
+      mkdirSync(tempDir, { recursive: true });
+    }
+    const tempPromptPath = path.join(
+      tempDir,
+      `iteration-${iteration}-prompt.md`
+    );
+    writeFileSync(tempPromptPath, dynamicPrompt, "utf-8");
+
+    return { promptPath: tempPromptPath, currentTask };
   }
 }
 

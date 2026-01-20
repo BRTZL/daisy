@@ -1,43 +1,43 @@
-# Ralph Looper
+# Daisy
 
-> Ralph Loop manager for continuous AI development with Claude Code
+> AI-powered task planning and execution for Claude Code
 
-A comprehensive TypeScript-based CLI tool and MCP server for managing Ralph Loops with Claude Code. The tool combines project management, task tracking, Ralph loop execution, and MCP integration in one powerful package.
+A comprehensive TypeScript-based CLI tool and MCP server for managing automated AI development loops with Claude Code. The tool combines project management, task tracking, loop execution, and MCP integration in one powerful package.
 
-## What is Ralph Loop?
+## What is Daisy?
 
-[Ralph Wiggum](https://devinterrupted.substack.com/p/inventing-the-ralph-wiggum-loop-creator) is a technique created by Geoffrey Huntley that uses infinite loops to enable continuous autonomous AI development. The concept is simple yet powerful:
+Daisy is built on the [Ralph Wiggum](https://devinterrupted.substack.com/p/inventing-the-ralph-wiggum-loop-creator) technique created by Geoffrey Huntley that uses infinite loops to enable continuous autonomous AI development. The concept is simple yet powerful:
 
 ```bash
 while :; do cat PROMPT.md | claude-code ; done
 ```
 
-Claude Code works on a task, and when it tries to exit, a hook intercepts the exit and feeds the same task back, creating continuous iteration. Ralph Looper makes this process manageable, trackable, and powerful.
+Claude Code works on a task, and when it tries to exit, a hook intercepts the exit and feeds the same task back, creating continuous iteration. Daisy makes this process manageable, trackable, and powerful.
 
 ## Features
 
-- 🎯 **Project Management** - Manage multiple projects with ease
-- ✅ **Task Tracking** - Import, track, and filter tasks with SQLite persistence
-- 🔄 **Ralph Loop Runner** - Execute continuous AI development loops
-- 📊 **Progress Monitoring** - Real-time status updates and iteration tracking
-- 🔌 **MCP Server** - Native Model Context Protocol integration for Claude Code
-- 💻 **Rich CLI** - Interactive commands with filtering, progress bars, and colorful output
-- 💾 **Data Persistence** - SQLite + Drizzle ORM for reliable data storage
+- **Task Tracking** - Recursive task structure with dependencies and acceptance criteria
+- **Loop Runner** - Execute continuous AI development loops
+- **Terminal UI** - Rich terminal interface with task progress and output panels
+- **Progress Monitoring** - Real-time status updates and iteration tracking
+- **MCP Server** - Native Model Context Protocol integration for Claude Code
+- **Rich CLI** - Interactive commands with filtering, progress bars, and colorful output
+- **Lightweight Storage** - JSON file-based storage (no database dependencies)
 
 ## Installation
 
 ### Global Installation
 
 ```bash
-bun install -g ralph-looper
+npm install -g plan-with-daisy
 # or
-npm install -g ralph-looper
+bun install -g plan-with-daisy
 ```
 
 ### Using npx (No Installation)
 
 ```bash
-npx ralph-looper init
+npx plan-with-daisy init
 ```
 
 ## Quick Start
@@ -45,115 +45,97 @@ npx ralph-looper init
 ### 1. Initialize a Project
 
 ```bash
-ralph-looper init ./my-project
+daisy init ./my-project
 ```
 
 This creates:
-- `.ralph-looper/` directory with database and config
+- `.daisy/` directory with config and task files
 - `PROMPT.md` template
 - Imports existing `tasks.json` if present
 
 ### 2. View Tasks
 
 ```bash
-ralph-looper tasks
+daisy tasks
 ```
 
 Filter tasks by status:
 ```bash
-ralph-looper tasks --status pending
-ralph-looper tasks --filter "auth"
+daisy tasks --status pending
+daisy tasks --filter "auth"
 ```
 
 ### 3. Check Status
 
 ```bash
-ralph-looper status
+daisy status
 ```
 
-### 4. Start Ralph Loop
+### 4. Start Daisy Loop
 
 ```bash
-ralph-looper run 10
+daisy run 10
 ```
 
 ## CLI Commands
 
-### Project Management
+### Initialization
 
 ```bash
-# Initialize new project
-ralph-looper init [path]
+# Initialize a new project in current directory
+daisy init
 
-# List all projects
-ralph-looper project list
-
-# Add existing project
-ralph-looper project add [path]
-
-# Switch active project
-ralph-looper project switch [id]
-
-# Show current project
-ralph-looper project current
-
-# Remove project
-ralph-looper project remove [id]
+# Initialize in a specific path
+daisy init ./my-project
 ```
 
 ### Task Management
 
 ```bash
 # List all tasks
-ralph-looper tasks
+daisy tasks
 
 # Filter by status
-ralph-looper tasks --status pending
+daisy tasks --status pending
 
 # Search tasks
-ralph-looper tasks --filter "auth"
+daisy tasks --filter "auth"
 
-# Interactive selection
-ralph-looper tasks --interactive
+# Show all nested tasks
+daisy tasks --all
+
+# Import tasks from file
+daisy tasks import [file]
 ```
 
 ### Loop Management
 
 ```bash
-# Start Ralph loop (10 iterations)
-ralph-looper run 10
-
-# Start with custom max iterations
-ralph-looper run --max 20
-
-# Continue from last iteration
-ralph-looper run --continue
-
-# Watch status.json for updates
-ralph-looper run --watch
+# Start Daisy loop (10 iterations)
+daisy run 10
 ```
 
-### Status & Configuration
+### Status & Data
 
 ```bash
 # Show current status
-ralph-looper status
+daisy status
 
 # Output as JSON
-ralph-looper status --json
+daisy status --json
 
-# Manage configuration
-ralph-looper config
+# Export project data
+daisy data export [file]
+
+# Import project data
+daisy data import <file>
 ```
 
 ### MCP Server
 
 ```bash
-# Start MCP server (stdio for Claude Desktop)
-ralph-looper mcp --stdio
-
-# Start with HTTP transport
-ralph-looper mcp --port 3000
+# Start MCP server (for Claude Desktop)
+daisy mcp
 ```
 
 ## MCP Server Integration
@@ -165,11 +147,11 @@ Add to your `claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
-    "ralph-looper": {
+    "daisy": {
       "command": "node",
-      "args": ["/path/to/node_modules/.bin/ralph-looper-mcp"],
+      "args": ["/path/to/node_modules/.bin/daisy-mcp"],
       "env": {
-        "RALPH_LOOPER_PROJECT_PATH": "/path/to/project"
+        "DAISY_PROJECT_PATH": "/path/to/project"
       }
     }
   }
@@ -179,50 +161,69 @@ Add to your `claude_desktop_config.json`:
 ### Available MCP Tools
 
 1. **get_current_project** - Get active project and status
-2. **list_tasks** - List/filter tasks by status or section
-3. **get_task_status** - Get current progress from status.json
-4. **update_task_status** - Update specific task item status
-5. **update_section_status** - Update entire section status
-6. **update_progress** - Update progress (phase, message, completion)
-7. **start_iteration** - Start new Ralph loop iteration
-8. **get_iteration_stats** - Get iteration and usage statistics
+2. **list_tasks** - List/filter tasks by status or task ID
+3. **get_next_task** - Get the next available task (pending, dependencies met)
+4. **update_task_status** - Update a specific task's status
+5. **get_stats** - Get task, conversation, and iteration statistics
+6. **signal_iteration_complete** - Signal that current iteration is complete
+
+## Task Format
+
+Tasks support a recursive structure with dependencies:
+
+```json
+[
+  {
+    "id": "auth",
+    "title": "Authentication System",
+    "description": "Implement user authentication",
+    "status": "pending",
+    "acceptanceCriteria": [
+      "Users can sign up",
+      "Users can log in",
+      "Sessions persist"
+    ],
+    "tasks": [
+      {
+        "id": "auth-signup",
+        "title": "Sign Up Flow",
+        "status": "pending"
+      },
+      {
+        "id": "auth-login",
+        "title": "Login Flow",
+        "status": "pending",
+        "dependsOn": ["auth-signup"]
+      }
+    ]
+  }
+]
+```
+
+### Task Status Values
+
+- `pending` - Not started
+- `in_progress` - Currently being worked on
+- `completed` - Successfully finished
+- `skipped` - Skipped (with optional reason)
+- `blocked` - Blocked by external factors
 
 ## Project Structure
 
 ```
-ralph-looper/
-├── .ralph-looper/              # Project-local config
-│   ├── database.sqlite         # SQLite database
-│   ├── PROMPT.md               # Prompt template
+your-project/
+├── .daisy/                     # Project config directory
+│   ├── config.json             # Project configuration
 │   ├── tasks.json              # Task definitions
-│   ├── status.json             # Current status
-│   └── config.json             # Project config
+│   ├── state.json              # Iteration state & usage
+│   ├── conversation.jsonl      # Conversation history
+│   └── PROMPT.md               # Prompt template
 │
-├── src/
-│   ├── cli/                    # CLI commands
-│   ├── mcp/                    # MCP server
-│   ├── db/                     # Database layer
-│   └── core/                   # Shared business logic
+├── .claude/                    # Claude Code config
+│   └── settings.json           # Permissions for Claude Code
 │
-└── package.json
+└── tasks.json                  # (Optional) Source tasks file
 ```
-
-## Data Storage
-
-### Global Database
-
-Located at `~/.ralph-looper/database.sqlite` - stores:
-- Projects (metadata, paths)
-- Cross-project statistics
-
-### Project Database
-
-Located at `.ralph-looper/database.sqlite` - stores:
-- Sections and items
-- Iterations
-- Status snapshots
-- Usage tracking
-- Prompt templates
 
 ## Development
 
@@ -230,40 +231,43 @@ Located at `.ralph-looper/database.sqlite` - stores:
 
 ```bash
 # Clone repository
-git clone https://github.com/yourusername/ralph-looper.git
-cd ralph-looper
+git clone https://github.com/plan-with-daisy/daisy.git
+cd daisy
 
 # Install dependencies
-bun install
+npm install
 
 # Build
-bun run build
+npm run build
 
 # Watch mode
-bun run dev
+npm run dev
 
 # Type check
-bun run typecheck
+npm run typecheck
+
+# Lint
+npm run check
 ```
 
 ### Running from Source
 
 ```bash
 # Link globally
-bun link
+npm link
 
-# Now you can use ralph-looper command
-ralph-looper --help
+# Now you can use daisy command
+daisy --help
 ```
 
 ## Roadmap
 
-- [x] Phase 1: Foundation (Project setup, database, CLI framework)
-- [x] Phase 2: Task Management (Import, filtering, status tracking)
+- [x] Phase 1: Foundation (Project setup, storage, CLI framework)
+- [x] Phase 2: Task Management (Import, filtering, recursive tasks)
 - [x] Phase 3: Loop Runner (Claude Code integration, output parsing)
 - [x] Phase 4: MCP Server (Full tool implementation)
 - [ ] Phase 5: Enhanced UX (Progress bars, rich UI)
-- [ ] Phase 6: Advanced Features (Reporting, analytics)
+- [ ] Phase 6: Advanced Features (Reporting, analytics, webhooks)
 
 ## Contributing
 
@@ -277,9 +281,8 @@ MIT
 
 - [Geoffrey Huntley](https://twitter.com/geoffreyhuntley) - Creator of Ralph Wiggum technique
 - [Anthropic](https://www.anthropic.com) - Claude Code and MCP
-- [Drizzle ORM](https://orm.drizzle.team) - Excellent TypeScript ORM
 - All contributors to this project
 
 ---
 
-Made with ❤️ by the Ralph Looper team
+Made with love by the Daisy team

@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/plan-with-daisy/daisy/main/schemas/state.schema.json",
+  "title": "Daisy State",
+  "description": "Iteration state and usage tracking stored in .daisy/state.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "JSON Schema reference"
+    },
+    "lastIteration": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Last completed iteration number"
+    },
+    "totalTokens": {
+      "type": "object",
+      "description": "Cumulative token usage",
+      "additionalProperties": false,
+      "properties": {
+        "input": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total input tokens used"
+        },
+        "output": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total output tokens used"
+        }
+      }
+    },
+    "totalCost": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Total cost in USD"
+    }
+  }
+}

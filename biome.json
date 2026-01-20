@@ -7,7 +7,7 @@
   },
   "files": {
     "ignoreUnknown": false,
-    "includes": ["src/**", "!dist/**", "!node_modules/**", "!.ralph-looper/**", "!*.sqlite", "!*.sqlite-shm", "!*.sqlite-wal"]
+    "includes": ["src/**", "!dist/**", "!node_modules/**", "!.ralph-looper/**", "!*.sqlite", "!*.sqlite-shm", "!*.sqlite-wal", "!src/web/src/styles/**/*.css"]
   },
   "formatter": {
     "enabled": true,
@@ -57,5 +57,10 @@
       "bracketSameLine": false
     },
     "globals": []
+  },
+  "css": {
+    "linter": {
+      "enabled": false
+    }
   }
 }

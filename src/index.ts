@@ -1,20 +1,17 @@
 /**
- * Ralph Looper - TypeScript Implementation
+ * Daisy - TypeScript Implementation
  *
- * A comprehensive CLI tool and MCP server for managing Ralph Loops with Claude Code.
+ * A comprehensive CLI tool and MCP server for managing AI development loops with Claude Code.
  */
 
-// Re-export key types and functions
-export * from "./core/types.js";
-export * from "./db/index.js";
-export * from "./db/queries.js";
-
-// Re-export database types with prefixes to avoid conflicts
+// Re-export specific types from core that don't conflict
 export type {
-  Item as DBItem,
-  Iteration as DBIteration,
-  Project as DBProject,
-  Prompt as DBPrompt,
-  Section as DBSection,
-  Usage as DBUsage,
-} from "./db/schema.js";
+  Iteration,
+  IterationStatus,
+  LoopRunnerEvents,
+  Phase,
+  TokenUsage,
+} from "./core/types.js";
+export * from "./storage/project.js";
+// Re-export storage types and functions (primary types for v2)
+export * from "./storage/types.js";

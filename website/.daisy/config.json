@@ -1,0 +1,10 @@
+{
+  "ai": {
+    "provider": "openrouter",
+    "model": "anthropic/claude-3-haiku"
+  },
+  "loop": {
+    "maxIterations": 10,
+    "maxAttemptsPerTask": 3
+  }
+}

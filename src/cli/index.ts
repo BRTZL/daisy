@@ -1,35 +1,41 @@
 import { Command } from "commander";
 import { initCommand } from "./commands/init.js";
-import { projectCommand } from "./commands/project.js";
-import { runCommand } from "./commands/run.js";
-import { statusCommand } from "./commands/status.js";
-import { tasksCommand } from "./commands/tasks.js";
+import { installCommand } from "./commands/install.js";
+import { openCommand } from "./commands/open.js";
+import { startCommand } from "./commands/start.js";
+import { stopCommand } from "./commands/stop.js";
+import { uninstallCommand } from "./commands/uninstall.js";
+import { useCommand } from "./commands/use.js";
 
 const program = new Command();
 
 program
-  .name("ralph-looper")
-  .description(
-    "Ralph Loop manager for continuous AI development with Claude Code"
-  )
-  .version("1.0.0");
+  .name("daisy")
+  .description("Daisy - AI-powered task planning and execution for Claude Code")
+  .version("2.1.0");
 
-// Init command
+// Init command (initialize a project with .daisy folder)
 program.addCommand(initCommand);
 
-// Project management
-program.addCommand(projectCommand);
+// Install command (install daemon + configure hosts)
+program.addCommand(installCommand);
 
-// Tasks command
-program.addCommand(tasksCommand);
+// Uninstall command (remove daemon + hosts entry)
+program.addCommand(uninstallCommand);
 
-// Status command
-program.addCommand(statusCommand);
+// Start command (start daemon)
+program.addCommand(startCommand);
 
-// Run command
-program.addCommand(runCommand);
+// Stop command (stop daemon)
+program.addCommand(stopCommand);
 
-// MCP server command
+// Open command (open browser to daisy.test)
+program.addCommand(openCommand);
+
+// Use command (switch to a project)
+program.addCommand(useCommand);
+
+// MCP server command (kept for Claude Code integration)
 program
   .command("mcp")
   .description("Start MCP server for Claude Code integration (stdio mode)")

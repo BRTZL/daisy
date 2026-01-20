@@ -1,0 +1,101 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/plan-with-daisy/daisy/main/schemas/config.schema.json",
+  "title": "Daisy Project Config",
+  "description": "Project configuration for daisy stored in .daisy/config.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "JSON Schema reference"
+    },
+    "loop": {
+      "type": "object",
+      "description": "Loop execution settings",
+      "additionalProperties": false,
+      "properties": {
+        "maxIterations": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 10,
+          "description": "Maximum iterations per run"
+        },
+        "maxAttemptsPerTask": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 3,
+          "description": "Max attempts per task before skipping"
+        }
+      }
+    },
+    "prompt": {
+      "type": "object",
+      "description": "Prompt template settings",
+      "additionalProperties": false,
+      "properties": {
+        "templatePath": {
+          "type": "string",
+          "description": "Path to custom prompt template"
+        }
+      }
+    },
+    "webhooks": {
+      "type": "array",
+      "description": "Configured webhooks for event notifications",
+      "items": {
+        "$ref": "#/definitions/WebhookConfig"
+      }
+    }
+  },
+  "definitions": {
+    "WebhookEvent": {
+      "type": "string",
+      "enum": [
+        "loop_started",
+        "loop_completed",
+        "iteration_started",
+        "iteration_completed",
+        "task_started",
+        "task_completed",
+        "task_failed",
+        "error"
+      ],
+      "description": "Events that can trigger webhook calls"
+    },
+    "WebhookConfig": {
+      "type": "object",
+      "required": ["name", "url", "events", "active"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Display name for the webhook",
+          "minLength": 1
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "URL to send POST requests to"
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/WebhookEvent"
+          },
+          "minItems": 1,
+          "description": "Events to trigger on"
+        },
+        "active": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether the webhook is active"
+        },
+        "secret": {
+          "type": "string",
+          "description": "Optional secret for HMAC-SHA256 signing payloads"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daisy - Autonomous AI Development Loops, Made Simple</title>
+    <meta name="description" content="Run Claude Code in continuous loops. Define tasks, let AI execute iteratively, track progress and costs automatically.">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Daisy - Autonomous AI Development Loops">
+    <meta property="og:description" content="Run Claude Code in continuous loops. Define tasks, let AI execute iteratively, track progress and costs automatically.">
+    <meta property="og:type" content="website">
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        daisy: {
+                            50: '#fefce8',
+                            100: '#fef9c3',
+                            200: '#fef08a',
+                            300: '#fde047',
+                            400: '#facc15',
+                            500: '#eab308',
+                            600: '#ca8a04',
+                            700: '#a16207',
+                            800: '#854d0e',
+                            900: '#713f12',
+                        }
+                    },
+                    fontFamily: {
+                        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'Liberation Mono', 'Courier New', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom styles for terminal mockup */
+        .terminal {
+            background: linear-gradient(180deg, #1e1e2e 0%, #181825 100%);
+        }
+        .terminal-header {
+            background: #313244;
+        }
+        .terminal-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+        .dot-red { background: #f38ba8; }
+        .dot-yellow { background: #f9e2af; }
+        .dot-green { background: #a6e3a1; }
+
+        /* Syntax highlighting colors */
+        .syntax-command { color: #89b4fa; }
+        .syntax-flag { color: #cba6f7; }
+        .syntax-string { color: #a6e3a1; }
+        .syntax-comment { color: #6c7086; }
+        .syntax-number { color: #fab387; }
+    </style>
+</head>
+<body class="bg-gray-950 text-gray-100 antialiased">
+    <!-- Navigation -->
+    <nav id="nav" class="fixed top-0 left-0 right-0 z-50 bg-gray-950/80 backdrop-blur-md border-b border-gray-800">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <!-- Logo -->
+                <div class="flex items-center gap-2">
+                    <svg class="w-8 h-8 text-daisy-400" viewBox="0 0 24 24" fill="currentColor">
+                        <circle cx="12" cy="12" r="4"/>
+                        <path d="M12 2v4M12 18v4M2 12h4M18 12h4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                    <span class="text-xl font-bold text-white">daisy</span>
+                </div>
+
+                <!-- Desktop Nav Links -->
+                <div class="hidden md:flex items-center gap-8">
+                    <a href="#features" class="text-gray-400 hover:text-white transition-colors">Features</a>
+                    <a href="#how-it-works" class="text-gray-400 hover:text-white transition-colors">How it Works</a>
+                    <a href="#use-cases" class="text-gray-400 hover:text-white transition-colors">Use Cases</a>
+                    <a href="#pricing" class="text-gray-400 hover:text-white transition-colors">Pricing</a>
+                    <a href="#faq" class="text-gray-400 hover:text-white transition-colors">FAQ</a>
+                </div>
+
+                <!-- Desktop CTA -->
+                <div class="hidden md:block">
+                    <a href="#hero" class="inline-flex items-center gap-2 px-4 py-2 bg-daisy-500 hover:bg-daisy-400 text-gray-900 font-semibold rounded-lg transition-colors" data-cta="nav-install">
+                        Get Started
+                    </a>
+                </div>
+
+                <!-- Mobile Menu Button -->
+                <button id="mobile-menu-btn" class="md:hidden p-2 text-gray-400 hover:text-white" aria-label="Open menu">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Mobile Menu -->
+        <div id="mobile-menu" class="hidden md:hidden bg-gray-900 border-b border-gray-800">
+            <div class="px-4 py-4 space-y-3">
+                <a href="#features" class="block text-gray-400 hover:text-white transition-colors">Features</a>
+                <a href="#how-it-works" class="block text-gray-400 hover:text-white transition-colors">How it Works</a>
+                <a href="#use-cases" class="block text-gray-400 hover:text-white transition-colors">Use Cases</a>
+                <a href="#pricing" class="block text-gray-400 hover:text-white transition-colors">Pricing</a>
+                <a href="#faq" class="block text-gray-400 hover:text-white transition-colors">FAQ</a>
+                <a href="#hero" class="block w-full text-center px-4 py-2 bg-daisy-500 hover:bg-daisy-400 text-gray-900 font-semibold rounded-lg transition-colors" data-cta="mobile-install">
+                    Get Started
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section id="hero" class="pt-32 pb-20 px-4 sm:px-6 lg:px-8">
+        <div class="max-w-7xl mx-auto">
+            <div class="text-center max-w-4xl mx-auto">
+                <h1 class="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6">
+                    Autonomous AI development loops, <span class="text-daisy-400">made simple.</span>
+                </h1>
+                <p class="text-xl text-gray-400 mb-10 max-w-2xl mx-auto">
+                    Define your tasks. Let Claude Code execute them iteratively. Track progress, costs, and results in real-time.
+                </p>
+
+                <!-- Install Command -->
+                <div class="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8">
+                    <div class="relative group">
+                        <div class="flex items-center gap-3 px-6 py-3 bg-gray-900 border border-gray-700 rounded-lg font-mono text-sm">
+                            <span class="text-gray-500">$</span>
+                            <code class="text-daisy-400">npm install -g daisy</code>
+                            <button id="copy-install" class="p-1.5 hover:bg-gray-800 rounded transition-colors" aria-label="Copy install command" data-cta="install">
+                                <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <a href="https://github.com/daisy-cli/daisy" class="inline-flex items-center gap-2 px-6 py-3 border border-gray-700 hover:border-gray-600 rounded-lg text-gray-300 hover:text-white transition-colors" data-cta="github">
+                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                            <path fill-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clip-rule="evenodd"/>
+                        </svg>
+                        View on GitHub
+                    </a>
+                </div>
+            </div>
+
+            <!-- Terminal Mockup -->
+            <div class="max-w-4xl mx-auto mt-12">
+                <div class="terminal rounded-xl overflow-hidden shadow-2xl border border-gray-800">
+                    <div class="terminal-header px-4 py-3 flex items-center gap-2">
+                        <span class="terminal-dot dot-red"></span>
+                        <span class="terminal-dot dot-yellow"></span>
+                        <span class="terminal-dot dot-green"></span>
+                        <span class="ml-4 text-sm text-gray-400 font-mono">terminal</span>
+                    </div>
+                    <div class="p-6 font-mono text-sm leading-relaxed">
+                        <div class="mb-4">
+                            <span class="text-gray-500">$</span> <span class="syntax-command">daisy</span> <span class="syntax-flag">run</span> <span class="syntax-number">5</span>
+                        </div>
+                        <div class="text-gray-400 mb-4">
+                            <span class="text-daisy-400">daisy</span> Starting loop iteration 1/5...
+                        </div>
+                        <div class="space-y-2 mb-4">
+                            <div class="flex items-center gap-2">
+                                <span class="text-green-400">✓</span>
+                                <span class="text-gray-300">Task 1: Set up project structure</span>
+                                <span class="text-gray-500 text-xs">completed</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-green-400">✓</span>
+                                <span class="text-gray-300">Task 2: Create hero section</span>
+                                <span class="text-gray-500 text-xs">completed</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-blue-400 animate-pulse">●</span>
+                                <span class="text-gray-300">Task 3: Add feature grid</span>
+                                <span class="text-gray-500 text-xs">in progress</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-gray-600">○</span>
+                                <span class="text-gray-500">Task 4: Build pricing section</span>
+                                <span class="text-gray-600 text-xs">pending</span>
+                            </div>
+                        </div>
+                        <div class="border-t border-gray-700 pt-4 mt-4">
+                            <div class="flex flex-wrap gap-6 text-xs">
+                                <div><span class="text-gray-500">Iteration:</span> <span class="text-daisy-400">3/5</span></div>
+                                <div><span class="text-gray-500">Tasks:</span> <span class="text-green-400">2</span>/<span class="text-gray-400">4</span></div>
+                                <div><span class="text-gray-500">Tokens:</span> <span class="text-gray-300">45,231</span></div>
+                                <div><span class="text-gray-500">Cost:</span> <span class="text-daisy-400">$0.34</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Trust Strip -->
+    <section id="trust" class="py-12 border-y border-gray-800 bg-gray-900/50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <p class="text-center text-gray-400 mb-6">Built on the <span class="text-daisy-400 font-semibold">Ralph Wiggum Loop</span> technique</p>
+            <div class="flex flex-wrap justify-center gap-4">
+                <span class="px-4 py-2 bg-gray-800 border border-gray-700 rounded-full text-sm text-gray-300">MCP Native</span>
+                <span class="px-4 py-2 bg-gray-800 border border-gray-700 rounded-full text-sm text-gray-300">Cost Tracking</span>
+                <span class="px-4 py-2 bg-gray-800 border border-gray-700 rounded-full text-sm text-gray-300">Task Dependencies</span>
+                <span class="px-4 py-2 bg-gray-800 border border-gray-700 rounded-full text-sm text-gray-300">Webhook Events</span>
+                <span class="px-4 py-2 bg-gray-800 border border-gray-700 rounded-full text-sm text-gray-300">Claude Code Compatible</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="py-20 px-4 sm:px-6 lg:px-8">
+        <div class="max-w-7xl mx-auto">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl sm:text-4xl font-bold text-white mb-4">Everything you need for autonomous AI development</h2>
+                <p class="text-gray-400 max-w-2xl mx-auto">Powerful features to run, track, and manage your AI development loops.</p>
+            </div>
+
+            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Feature 1 -->
+                <div class="p-6 bg-gray-900 border border-gray-800 rounded-xl hover:border-gray-700 transition-colors">
+                    <div class="w-12 h-12 bg-daisy-500/10 rounded-lg flex items-center justify-center mb-4">
+                        <svg class="w-6 h-6 text-daisy-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-semibold text-white mb-2">Continuous Loop Execution</h3>
+                    <p class="text-gray-400">Run Claude Code in controlled iterations. Set limits, track progress, stop anytime.</p>
+                </div>
+
+                <!-- Feature 2 -->
+                <div class="p-6 bg-gray-900 border border-gray-800 rounded-xl hover:border-gray-700 transition-colors">
+                    <div class="w-12 h-12 bg-daisy-500/10 rounded-lg flex items-center justify-center mb-4">
+                        <svg class="w-6 h-6 text-daisy-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-semibold text-white mb-2">Hierarchical Task Management</h3>
+                    <p class="text-gray-400">Define tasks with subtasks, dependencies, and acceptance criteria. AI picks up where it left off.</p>
+                </div>
+
+                <!-- Feature 3 -->
+                <div class="p-6 bg-gray-900 border border-gray-800 rounded-xl hover:border-gray-700 transition-colors">
+                    <div class="w-12 h-12 bg-daisy-500/10 rounded-lg flex items-center justify-center mb-4">
+                        <svg class="w-6 h-6 text-daisy-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-semibold text-white mb-2">AI-Powered Planning</h3>
+                    <p class="text-gray-400">Generate structured tasks from PRD documents using multiple AI providers (OpenRouter, OpenAI, Anthropic).</p>
+                </div>
+
+                <!-- Feature 4 -->
+                <div class="p-6 bg-gray-900 border border-gray-800 rounded-xl hover:border-gray-700 transition-colors">
+                    <div class="w-12 h-12 bg-daisy-500/10 rounded-lg flex items-center justify-center mb-4">
+                        <svg class="w-6 h-6 text-daisy-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-semibold text-white mb-2">Cost & Token Tracking</h3>
+                    <p class="text-gray-400">Monitor API usage per iteration. Know exactly what each development cycle costs.</p>
+                </div>
+
+                <!-- Feature 5 -->
+                <div class="p-6 bg-gray-900 border border-gray-800 rounded-xl hover:border-gray-700 transition-colors">
+                    <div class="w-12 h-12 bg-daisy-500/10 rounded-lg flex items-center justify-center mb-4">
+                        <svg class="w-6 h-6 text-daisy-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-semibold text-white mb-2">MCP Server Integration</h3>
+                    <p class="text-gray-400">Native tools for Claude Code to manage tasks, signal completion, and track stats during execution.</p>
+                </div>
+
+                <!-- Feature 6 -->
+                <div class="p-6 bg-gray-900 border border-gray-800 rounded-xl hover:border-gray-700 transition-colors">
+                    <div class="w-12 h-12 bg-daisy-500/10 rounded-lg flex items-center justify-center mb-4">
+                        <svg class="w-6 h-6 text-daisy-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-semibold text-white mb-2">Terminal UI & Webhooks</h3>
+                    <p class="text-gray-400">Rich terminal interface with real-time progress. Webhook events for CI/CD integration.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works -->
+    <section id="how-it-works" class="py-20 px-4 sm:px-6 lg:px-8 bg-gray-900/50">
+        <div class="max-w-7xl mx-auto">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl sm:text-4xl font-bold text-white mb-4">How it works</h2>
+                <p class="text-gray-400 max-w-2xl mx-auto">Get started in three simple steps.</p>
+            </div>
+
+            <div class="grid md:grid-cols-3 gap-8">
+                <!-- Step 1 -->
+                <div class="text-center">
+                    <div class="w-16 h-16 bg-daisy-500 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <span class="text-2xl font-bold text-gray-900">1</span>
+                    </div>
+                    <h3 class="text-xl font-semibold text-white mb-3">Initialize</h3>
+                    <p class="text-gray-400 mb-4">Run <code class="px-2 py-1 bg-gray-800 rounded text-daisy-400 text-sm">daisy init</code> to set up your project with tasks, prompts, and MCP configuration.</p>
+                </div>
+
+                <!-- Step 2 -->
+                <div class="text-center">
+                    <div class="w-16 h-16 bg-daisy-500 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <span class="text-2xl font-bold text-gray-900">2</span>
+                    </div>
+                    <h3 class="text-xl font-semibold text-white mb-3">Plan</h3>
+                    <p class="text-gray-400 mb-4">Define tasks manually or run <code class="px-2 py-1 bg-gray-800 rounded text-daisy-400 text-sm">daisy plan</code> to generate them from a PRD using AI.</p>
+                </div>
+
+                <!-- Step 3 -->
+                <div class="text-center">
+                    <div class="w-16 h-16 bg-daisy-500 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <span class="text-2xl font-bold text-gray-900">3</span>
+                    </div>
+                    <h3 class="text-xl font-semibold text-white mb-3">Execute</h3>
+                    <p class="text-gray-400 mb-4">Run <code class="px-2 py-1 bg-gray-800 rounded text-daisy-400 text-sm">daisy run 10</code> to execute 10 iterations. Claude Code works through tasks, you watch progress.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Use Cases -->
+    <section id="use-cases" class="py-20 px-4 sm:px-6 lg:px-8">
+        <div class="max-w-7xl mx-auto">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl sm:text-4xl font-bold text-white mb-4">Use cases</h2>
+                <p class="text-gray-400 max-w-2xl mx-auto">See how developers are using Daisy to ship faster.</p>
+            </div>
+
+            <div class="grid md:grid-cols-2 gap-6">
+                <!-- Use Case 1 -->
+                <div class="p-6 bg-gray-900 border border-gray-800 rounded-xl">
+                    <div class="flex items-start gap-4">
+                        <div class="w-10 h-10 bg-daisy-500/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <svg class="w-5 h-5 text-daisy-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-semibold text-white mb-2">Ship features while you sleep</h3>
+                            <p class="text-gray-400">Set up tasks, run overnight, review in the morning. Wake up to completed features.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Use Case 2 -->
+                <div class="p-6 bg-gray-900 border border-gray-800 rounded-xl">
+                    <div class="flex items-start gap-4">
+                        <div class="w-10 h-10 bg-daisy-500/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <svg class="w-5 h-5 text-daisy-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-semibold text-white mb-2">Automated refactoring cycles</h3>
+                            <p class="text-gray-400">Let AI iterate through codebase improvements while you focus on architecture decisions.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Use Case 3 -->
+                <div class="p-6 bg-gray-900 border border-gray-800 rounded-xl">
+                    <div class="flex items-start gap-4">
+                        <div class="w-10 h-10 bg-daisy-500/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <svg class="w-5 h-5 text-daisy-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-semibold text-white mb-2">PRD to implementation</h3>
+                            <p class="text-gray-400">Generate tasks from specs, execute with tracking. Go from requirements to working code automatically.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Use Case 4 -->
+                <div class="p-6 bg-gray-900 border border-gray-800 rounded-xl">
+                    <div class="flex items-start gap-4">
+                        <div class="w-10 h-10 bg-daisy-500/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <svg class="w-5 h-5 text-daisy-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-semibold text-white mb-2">CI/CD AI workflows</h3>
+                            <p class="text-gray-400">Integrate with webhooks for automated pipelines. Trigger AI development from your existing tools.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pricing -->
+    <section id="pricing" class="py-20 px-4 sm:px-6 lg:px-8 bg-gray-900/50">
+        <div class="max-w-7xl mx-auto">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl sm:text-4xl font-bold text-white mb-4">Simple, transparent pricing</h2>
+                <p class="text-gray-400 max-w-2xl mx-auto">Start free, scale when you need to.</p>
+            </div>
+
+            <div class="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+                <!-- Open Source -->
+                <div class="p-8 bg-gray-900 border border-gray-800 rounded-xl">
+                    <h3 class="text-2xl font-bold text-white mb-2">Open Source</h3>
+                    <p class="text-gray-400 mb-6">Free forever, MIT licensed</p>
+                    <div class="text-4xl font-bold text-white mb-6">$0</div>
+                    <ul class="space-y-3 mb-8">
+                        <li class="flex items-center gap-3 text-gray-300">
+                            <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                            Unlimited loops
+                        </li>
+                        <li class="flex items-center gap-3 text-gray-300">
+                            <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                            All core features
+                        </li>
+                        <li class="flex items-center gap-3 text-gray-300">
+                            <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                            Community support
+                        </li>
+                    </ul>
+                    <a href="https://github.com/daisy-cli/daisy" class="block w-full text-center px-6 py-3 border border-gray-700 hover:border-gray-600 rounded-lg text-gray-300 hover:text-white transition-colors" data-cta="github-star">
+                        Star on GitHub
+                    </a>
+                </div>
+
+                <!-- Pro -->
+                <div class="p-8 bg-gray-900 border border-daisy-500/50 rounded-xl relative">
+                    <div class="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-daisy-500 text-gray-900 text-sm font-semibold rounded-full">
+                        Coming Soon
+                    </div>
+                    <h3 class="text-2xl font-bold text-white mb-2">Pro</h3>
+                    <p class="text-gray-400 mb-6">For teams and power users</p>
+                    <div class="text-4xl font-bold text-white mb-6">TBD</div>
+                    <ul class="space-y-3 mb-8">
+                        <li class="flex items-center gap-3 text-gray-300">
+                            <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                            Everything in Open Source
+                        </li>
+                        <li class="flex items-center gap-3 text-gray-300">
+                            <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                            Cloud dashboard
+                        </li>
+                        <li class="flex items-center gap-3 text-gray-300">
+                            <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                            Team features
+                        </li>
+                        <li class="flex items-center gap-3 text-gray-300">
+                            <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                            Priority support
+                        </li>
+                    </ul>
+                    <button class="block w-full text-center px-6 py-3 bg-daisy-500 hover:bg-daisy-400 text-gray-900 font-semibold rounded-lg transition-colors" data-cta="waitlist">
+                        Join Waitlist
+                    </button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FAQ -->
+    <section id="faq" class="py-20 px-4 sm:px-6 lg:px-8">
+        <div class="max-w-3xl mx-auto">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl sm:text-4xl font-bold text-white mb-4">Frequently asked questions</h2>
+                <p class="text-gray-400">Everything you need to know about Daisy.</p>
+            </div>
+
+            <div class="space-y-4">
+                <!-- FAQ 1 -->
+                <div class="faq-item border border-gray-800 rounded-lg overflow-hidden">
+                    <button class="faq-trigger w-full px-6 py-4 flex items-center justify-between text-left bg-gray-900 hover:bg-gray-800 transition-colors" aria-expanded="false">
+                        <span class="font-medium text-white">What is the Ralph Wiggum Loop?</span>
+                        <svg class="faq-icon w-5 h-5 text-gray-400 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                    </button>
+                    <div class="faq-content hidden px-6 py-4 bg-gray-900/50">
+                        <p class="text-gray-400">The Ralph Wiggum Loop is a technique pioneered by Geoffrey Huntley for running Claude Code in continuous autonomous loops. It uses a simple prompt file that tells the AI to pick up tasks, complete them, and signal when done - enabling hands-off development overnight or while you focus on other work.</p>
+                    </div>
+                </div>
+
+                <!-- FAQ 2 -->
+                <div class="faq-item border border-gray-800 rounded-lg overflow-hidden">
+                    <button class="faq-trigger w-full px-6 py-4 flex items-center justify-between text-left bg-gray-900 hover:bg-gray-800 transition-colors" aria-expanded="false">
+                        <span class="font-medium text-white">Does it work with my existing Claude Code setup?</span>
+                        <svg class="faq-icon w-5 h-5 text-gray-400 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                    </button>
+                    <div class="faq-content hidden px-6 py-4 bg-gray-900/50">
+                        <p class="text-gray-400">Yes! Daisy is designed to be non-intrusive. It adds an MCP server that Claude Code can use for task management, but it doesn't modify your existing setup. Your prompts, tools, and configurations remain unchanged.</p>
+                    </div>
+                </div>
+
+                <!-- FAQ 3 -->
+                <div class="faq-item border border-gray-800 rounded-lg overflow-hidden">
+                    <button class="faq-trigger w-full px-6 py-4 flex items-center justify-between text-left bg-gray-900 hover:bg-gray-800 transition-colors" aria-expanded="false">
+                        <span class="font-medium text-white">How do I control costs?</span>
+                        <svg class="faq-icon w-5 h-5 text-gray-400 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                    </button>
+                    <div class="faq-content hidden px-6 py-4 bg-gray-900/50">
+                        <p class="text-gray-400">Daisy gives you full control: set iteration limits, monitor token usage in real-time, and stop execution anytime. The terminal UI shows cost per iteration so you always know exactly what you're spending.</p>
+                    </div>
+                </div>
+
+                <!-- FAQ 4 -->
+                <div class="faq-item border border-gray-800 rounded-lg overflow-hidden">
+                    <button class="faq-trigger w-full px-6 py-4 flex items-center justify-between text-left bg-gray-900 hover:bg-gray-800 transition-colors" aria-expanded="false">
+                        <span class="font-medium text-white">Can I use different AI providers for planning?</span>
+                        <svg class="faq-icon w-5 h-5 text-gray-400 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                    </button>
+                    <div class="faq-content hidden px-6 py-4 bg-gray-900/50">
+                        <p class="text-gray-400">Yes! The <code class="px-1 py-0.5 bg-gray-800 rounded text-daisy-400">daisy plan</code> command supports multiple AI providers including OpenRouter, OpenAI, and Anthropic. Use the provider that works best for your use case.</p>
+                    </div>
+                </div>
+
+                <!-- FAQ 5 -->
+                <div class="faq-item border border-gray-800 rounded-lg overflow-hidden">
+                    <button class="faq-trigger w-full px-6 py-4 flex items-center justify-between text-left bg-gray-900 hover:bg-gray-800 transition-colors" aria-expanded="false">
+                        <span class="font-medium text-white">What's MCP and why does it matter?</span>
+                        <svg class="faq-icon w-5 h-5 text-gray-400 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                    </button>
+                    <div class="faq-content hidden px-6 py-4 bg-gray-900/50">
+                        <p class="text-gray-400">MCP (Model Context Protocol) is Anthropic's standard for extending Claude's capabilities with custom tools. Daisy runs as an MCP server, providing Claude Code with native tools to manage tasks, track progress, and signal completion - all within the AI's context.</p>
+                    </div>
+                </div>
+
+                <!-- FAQ 6 -->
+                <div class="faq-item border border-gray-800 rounded-lg overflow-hidden">
+                    <button class="faq-trigger w-full px-6 py-4 flex items-center justify-between text-left bg-gray-900 hover:bg-gray-800 transition-colors" aria-expanded="false">
+                        <span class="font-medium text-white">Is my code safe?</span>
+                        <svg class="faq-icon w-5 h-5 text-gray-400 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                    </button>
+                    <div class="faq-content hidden px-6 py-4 bg-gray-900/50">
+                        <p class="text-gray-400">Daisy runs within Claude Code's existing sandbox and respects all your permission settings. It doesn't bypass any security controls - it just orchestrates the loop. Your code stays local and secure.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Final CTA -->
+    <section id="cta" class="py-20 px-4 sm:px-6 lg:px-8 bg-gray-900/50 border-t border-gray-800">
+        <div class="max-w-3xl mx-auto text-center">
+            <h2 class="text-3xl sm:text-4xl font-bold text-white mb-6">Start building with continuous AI loops today.</h2>
+            <div class="flex flex-col items-center gap-4 mb-8">
+                <div class="relative group">
+                    <div class="flex items-center gap-3 px-6 py-3 bg-gray-900 border border-gray-700 rounded-lg font-mono text-sm">
+                        <span class="text-gray-500">$</span>
+                        <code class="text-daisy-400">npm install -g daisy && daisy init</code>
+                        <button id="copy-install-footer" class="p-1.5 hover:bg-gray-800 rounded transition-colors" aria-label="Copy install command" data-cta="install-footer">
+                            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <a href="#" class="text-daisy-400 hover:text-daisy-300 transition-colors">Read the docs &rarr;</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="py-12 px-4 sm:px-6 lg:px-8 border-t border-gray-800">
+        <div class="max-w-7xl mx-auto">
+            <div class="flex flex-col md:flex-row items-center justify-between gap-6">
+                <div class="flex items-center gap-2">
+                    <svg class="w-6 h-6 text-daisy-400" viewBox="0 0 24 24" fill="currentColor">
+                        <circle cx="12" cy="12" r="4"/>
+                        <path d="M12 2v4M12 18v4M2 12h4M18 12h4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                    <span class="text-lg font-bold text-white">daisy</span>
+                </div>
+                <div class="flex flex-wrap justify-center gap-6 text-sm text-gray-400">
+                    <a href="https://github.com/daisy-cli/daisy" class="hover:text-white transition-colors">GitHub</a>
+                    <a href="#" class="hover:text-white transition-colors">Documentation</a>
+                    <a href="#" class="hover:text-white transition-colors">Discord</a>
+                    <a href="#" class="hover:text-white transition-colors">Privacy</a>
+                    <a href="#" class="hover:text-white transition-colors">Terms</a>
+                </div>
+            </div>
+            <p class="text-center text-gray-500 text-sm mt-8">&copy; 2024 Daisy. MIT License.</p>
+        </div>
+    </footer>
+
+    <!-- JavaScript -->
+    <script>
+        // Mobile menu toggle
+        const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+        const mobileMenu = document.getElementById('mobile-menu');
+
+        mobileMenuBtn.addEventListener('click', () => {
+            mobileMenu.classList.toggle('hidden');
+        });
+
+        // Close mobile menu when clicking a link
+        mobileMenu.querySelectorAll('a').forEach(link => {
+            link.addEventListener('click', () => {
+                mobileMenu.classList.add('hidden');
+            });
+        });
+
+        // FAQ accordion
+        document.querySelectorAll('.faq-trigger').forEach(trigger => {
+            trigger.addEventListener('click', () => {
+                const content = trigger.nextElementSibling;
+                const icon = trigger.querySelector('.faq-icon');
+                const isExpanded = trigger.getAttribute('aria-expanded') === 'true';
+
+                // Close all other FAQs
+                document.querySelectorAll('.faq-trigger').forEach(otherTrigger => {
+                    if (otherTrigger !== trigger) {
+                        otherTrigger.setAttribute('aria-expanded', 'false');
+                        otherTrigger.nextElementSibling.classList.add('hidden');
+                        otherTrigger.querySelector('.faq-icon').style.transform = 'rotate(0deg)';
+                    }
+                });
+
+                // Toggle current FAQ
+                trigger.setAttribute('aria-expanded', !isExpanded);
+                content.classList.toggle('hidden');
+                icon.style.transform = isExpanded ? 'rotate(0deg)' : 'rotate(180deg)';
+            });
+        });
+
+        // Copy to clipboard
+        function setupCopyButton(buttonId, textToCopy) {
+            const button = document.getElementById(buttonId);
+            if (button) {
+                button.addEventListener('click', async () => {
+                    try {
+                        await navigator.clipboard.writeText(textToCopy);
+                        // Show feedback
+                        const originalHTML = button.innerHTML;
+                        button.innerHTML = '<svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>';
+                        setTimeout(() => {
+                            button.innerHTML = originalHTML;
+                        }, 2000);
+                    } catch (err) {
+                        console.error('Failed to copy:', err);
+                    }
+                });
+            }
+        }
+
+        setupCopyButton('copy-install', 'npm install -g daisy');
+        setupCopyButton('copy-install-footer', 'npm install -g daisy && daisy init');
+    </script>
+</body>
+</html>

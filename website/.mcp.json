@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "ralph-looper": {
+      "command": "ralph-looper",
+      "args": ["mcp"]
+    },
+    "chrome-devtools": {
+      "command": "npx",
+      "args": ["-y", "chrome-devtools-mcp@latest"]
+    }
+  }
+}

@@ -1,70 +1,120 @@
 /**
- * MCP Server for Ralph Looper
+ * MCP Server for Daisy
  * Provides Model Context Protocol integration for Claude Code
  */
 
-import { existsSync } from "node:fs";
-import path from "node:path";
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import { createDatabase, getGlobalDb } from "../db/index.js";
-import * as queries from "../db/queries.js";
+
+import {
+  findTask,
+  flattenTasks,
+  formatTaskTree,
+  getConfig,
+  getCurrentProject,
+  getNextTask,
+  getProjectDir,
+  getTaskStats,
+  getTasks,
+  insertTask,
+  removeTaskCascade,
+  updateTask,
+  updateTaskStatus,
+  validateTaskTree,
+} from "../storage/project.js";
+import {
+  FILES,
+  type Signal,
+  type SignalAction,
+  type Task,
+  type TaskSignalData,
+  type TaskStatus,
+} from "../storage/types.js";
 
 interface ListTasksArgs {
-  sectionId?: number;
-  status?: "pending" | "passed" | "skipped";
+  taskId?: string;
+  status?: TaskStatus;
+  flat?: boolean;
 }
 
 interface UpdateTaskStatusArgs {
-  sectionId: number;
-  itemIndex: number;
-  status: "pending" | "passed" | "skipped";
-  note?: string;
-}
-
-interface UpdateSectionStatusArgs {
-  sectionId: number;
-  status: "pending" | "completed" | "partial";
-}
-
-interface UpdateProgressArgs {
-  sectionId: number;
-  sectionName: string;
-  phase: "selecting" | "implementing" | "testing" | "committing" | "done";
-  message: string;
-  itemsTotal: number;
-  itemsCompleted: number;
+  taskId: string;
+  status: TaskStatus;
+  skipReason?: string;
+  completionSummary?: string;
 }
 
 interface StartIterationArgs {
   maxIterations?: number;
 }
 
-interface ToolArgs {
-  [key: string]: unknown;
+interface SignalIterationCompleteArgs {
+  reason?: string;
+  /** Set to true to signal that all work is complete and the loop should end */
+  completeLoop?: boolean;
 }
 
-interface TaskItem {
-  text: string;
-  status: string;
-  note: string | null;
+// Planning mode interfaces
+interface AddTaskArgs {
+  id: string;
+  title: string;
+  description?: string;
+  parentId?: string;
+  dependsOn?: string[];
+  acceptanceCriteria?: string[];
+  afterId?: string;
+  beforeId?: string;
 }
 
-interface SectionWithItems {
-  id: number;
-  name: string;
-  status: string;
-  items: TaskItem[];
+interface UpdatePlanTaskArgs {
+  taskId: string;
+  title?: string;
+  description?: string;
+  dependsOn?: string[];
+  acceptanceCriteria?: string[];
+}
+
+interface RemoveTaskArgs {
+  taskId: string;
+  reason?: string;
+}
+
+interface ListPlanTasksArgs {
+  format?: "tree" | "flat" | "summary";
+}
+
+interface FinalizePlanArgs {
+  summary: string;
+}
+
+/**
+ * Write a signal file for TUI/Loop Runner communication
+ */
+function writeSignal(
+  projectPath: string,
+  action: SignalAction,
+  data?: TaskSignalData
+): void {
+  const signalPath = join(getProjectDir(projectPath), FILES.signal);
+  const signal: Signal = {
+    action,
+    timestamp: new Date().toISOString(),
+    data,
+  };
+  writeFileSync(signalPath, JSON.stringify(signal, null, 2));
 }
 
 export function createMCPServer() {
   const server = new Server(
     {
-      name: "ralph-looper-mcp-server",
-      version: "1.0.0",
+      name: "daisy-mcp-server",
+      version: "2.0.0",
     },
     {
       capabilities: {
@@ -87,25 +137,36 @@ export function createMCPServer() {
         },
         {
           name: "list_tasks",
-          description: "List all tasks or filter by status/section",
+          description: "List all tasks or filter by status/task ID",
           inputSchema: {
             type: "object",
             properties: {
               status: {
                 type: "string",
-                enum: ["pending", "passed", "skipped"],
+                enum: [
+                  "pending",
+                  "in_progress",
+                  "completed",
+                  "skipped",
+                  "blocked",
+                ],
                 description: "Filter by task status",
               },
-              sectionId: {
-                type: "number",
-                description: "Filter by section ID",
+              taskId: {
+                type: "string",
+                description: "Get a specific task by ID (and its children)",
+              },
+              flat: {
+                type: "boolean",
+                description: "Return flattened list instead of hierarchy",
               },
             },
           },
         },
         {
-          name: "get_task_status",
-          description: "Get current progress status",
+          name: "get_next_task",
+          description:
+            "Get the next available task to work on (pending, dependencies met)",
           inputSchema: {
             type: "object",
             properties: {},
@@ -113,101 +174,49 @@ export function createMCPServer() {
         },
         {
           name: "update_task_status",
-          description: "Update status of a specific task item",
+          description: "Update status of a specific task",
           inputSchema: {
             type: "object",
             properties: {
-              sectionId: {
-                type: "number",
-                description: "Section ID",
-              },
-              itemIndex: {
-                type: "number",
-                description: "Item index within section (0-based)",
+              taskId: {
+                type: "string",
+                description: "Task ID",
               },
               status: {
-                type: "string",
-                enum: ["pending", "passed", "skipped"],
-                description: "New status",
-              },
-              note: {
-                type: "string",
-                description: "Optional note for skipped items",
-              },
-            },
-            required: ["sectionId", "itemIndex", "status"],
-          },
-        },
-        {
-          name: "update_section_status",
-          description: "Update status of an entire section",
-          inputSchema: {
-            type: "object",
-            properties: {
-              sectionId: {
-                type: "number",
-                description: "Section ID",
-              },
-              status: {
-                type: "string",
-                enum: ["pending", "completed", "partial"],
-                description: "New status",
-              },
-            },
-            required: ["sectionId", "status"],
-          },
-        },
-        {
-          name: "update_progress",
-          description: "Update current progress (phase, message, completion)",
-          inputSchema: {
-            type: "object",
-            properties: {
-              sectionId: {
-                type: "number",
-                description: "Current section ID",
-              },
-              sectionName: {
-                type: "string",
-                description: "Current section name",
-              },
-              phase: {
                 type: "string",
                 enum: [
-                  "selecting",
-                  "implementing",
-                  "testing",
-                  "committing",
-                  "done",
+                  "pending",
+                  "in_progress",
+                  "completed",
+                  "skipped",
+                  "blocked",
                 ],
-                description: "Current phase",
+                description: "New status",
               },
-              message: {
+              skipReason: {
                 type: "string",
-                description: "Status message",
+                description: "Reason for skipping (when status is 'skipped')",
               },
-              itemsTotal: {
-                type: "number",
-                description: "Total items in section",
-              },
-              itemsCompleted: {
-                type: "number",
-                description: "Completed items",
+              completionSummary: {
+                type: "string",
+                description:
+                  "Summary of completion (when status is 'completed')",
               },
             },
-            required: [
-              "sectionId",
-              "sectionName",
-              "phase",
-              "message",
-              "itemsTotal",
-              "itemsCompleted",
-            ],
+            required: ["taskId", "status"],
+          },
+        },
+        {
+          name: "get_stats",
+          description: "Get task and conversation statistics",
+          inputSchema: {
+            type: "object",
+            properties: {},
           },
         },
         {
           name: "start_iteration",
-          description: "Start a new Ralph loop iteration (for advanced use)",
+          description: "Start a new Daisy loop iteration (for advanced use)",
           inputSchema: {
             type: "object",
             properties: {
@@ -219,11 +228,157 @@ export function createMCPServer() {
           },
         },
         {
-          name: "get_iteration_stats",
-          description: "Get statistics for iterations and usage",
+          name: "signal_iteration_complete",
+          description:
+            "Signal that the current task/milestone is complete and this iteration should end. Call this after completing a task or when ready for the next iteration. For open-ended loops, set completeLoop: true to signal that all work is done.",
           inputSchema: {
             type: "object",
-            properties: {},
+            properties: {
+              reason: {
+                type: "string",
+                description:
+                  "Reason for ending iteration (e.g., 'task completed', 'blocked', 'needs review')",
+              },
+              completeLoop: {
+                type: "boolean",
+                description:
+                  "Set to true to signal that all work is complete and the entire loop should end (for open-ended loops)",
+              },
+            },
+          },
+        },
+        // Planning mode tools
+        {
+          name: "add_task",
+          description:
+            "Add a new task to the planning tree. Use during interactive planning sessions to build the task structure incrementally.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              id: {
+                type: "string",
+                description:
+                  "Unique task identifier (e.g., 'setup-1', 'auth-1a')",
+              },
+              title: {
+                type: "string",
+                description: "Short, descriptive task title",
+              },
+              description: {
+                type: "string",
+                description: "Detailed description of what the task involves",
+              },
+              parentId: {
+                type: "string",
+                description:
+                  "ID of parent task if this is a subtask (creates nesting)",
+              },
+              dependsOn: {
+                type: "array",
+                items: { type: "string" },
+                description: "IDs of tasks that must complete before this one",
+              },
+              acceptanceCriteria: {
+                type: "array",
+                items: { type: "string" },
+                description: "List of criteria for task completion",
+              },
+              afterId: {
+                type: "string",
+                description:
+                  "Insert after this task ID (at same level, for ordering)",
+              },
+              beforeId: {
+                type: "string",
+                description:
+                  "Insert before this task ID (at same level, for ordering)",
+              },
+            },
+            required: ["id", "title"],
+          },
+        },
+        {
+          name: "update_plan_task",
+          description:
+            "Update an existing task's properties during planning. Use for partial updates - only specified fields are changed.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              taskId: {
+                type: "string",
+                description: "ID of the task to update",
+              },
+              title: {
+                type: "string",
+                description: "New title for the task",
+              },
+              description: {
+                type: "string",
+                description: "New description for the task",
+              },
+              dependsOn: {
+                type: "array",
+                items: { type: "string" },
+                description: "New list of dependency task IDs",
+              },
+              acceptanceCriteria: {
+                type: "array",
+                items: { type: "string" },
+                description: "New list of acceptance criteria",
+              },
+            },
+            required: ["taskId"],
+          },
+        },
+        {
+          name: "remove_task",
+          description:
+            "Remove a task and all its subtasks from the plan. Use to restructure or correct the task tree.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              taskId: {
+                type: "string",
+                description: "ID of the task to remove",
+              },
+              reason: {
+                type: "string",
+                description: "Optional reason for removal",
+              },
+            },
+            required: ["taskId"],
+          },
+        },
+        {
+          name: "list_plan_tasks",
+          description:
+            "Get current task structure during planning. Use to review what has been created so far.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              format: {
+                type: "string",
+                enum: ["tree", "flat", "summary"],
+                description:
+                  "Output format: 'tree' (hierarchical), 'flat' (list), or 'summary' (counts only)",
+              },
+            },
+          },
+        },
+        {
+          name: "finalize_plan",
+          description:
+            "Finalize the planning session. Validates all tasks and dependencies, then signals completion to the TUI.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              summary: {
+                type: "string",
+                description:
+                  "Summary of the planning session and created tasks",
+              },
+            },
+            required: ["summary"],
           },
         },
       ],
@@ -237,36 +392,49 @@ export function createMCPServer() {
     try {
       switch (name) {
         case "get_current_project":
-          return await getCurrentProject();
+          return await getCurrentProjectHandler();
 
         case "list_tasks":
-          return await listTasks(
-            args ? (args as unknown as ListTasksArgs) : undefined
-          );
+          return await listTasks(args as unknown as ListTasksArgs | undefined);
 
-        case "get_task_status":
-          return await getTaskStatus();
+        case "get_next_task":
+          return await getNextTaskHandler();
 
         case "update_task_status":
-          return await updateTaskStatus(
+          return await updateTaskStatusHandler(
             args as unknown as UpdateTaskStatusArgs
           );
 
-        case "update_section_status":
-          return await updateSectionStatus(
-            args as unknown as UpdateSectionStatusArgs
-          );
-
-        case "update_progress":
-          return await updateProgress(args as unknown as UpdateProgressArgs);
+        case "get_stats":
+          return await getStats();
 
         case "start_iteration":
           return await startIteration(args as unknown as StartIterationArgs);
 
-        case "get_iteration_stats":
-          return await getIterationStats(
-            args ? (args as unknown as ToolArgs) : undefined
+        case "signal_iteration_complete":
+          return await signalIterationComplete(
+            args as unknown as SignalIterationCompleteArgs
           );
+
+        // Planning mode tools
+        case "add_task":
+          return await addTaskHandler(args as unknown as AddTaskArgs);
+
+        case "update_plan_task":
+          return await updatePlanTaskHandler(
+            args as unknown as UpdatePlanTaskArgs
+          );
+
+        case "remove_task":
+          return await removeTaskHandler(args as unknown as RemoveTaskArgs);
+
+        case "list_plan_tasks":
+          return await listPlanTasksHandler(
+            args as unknown as ListPlanTasksArgs
+          );
+
+        case "finalize_plan":
+          return await finalizePlanHandler(args as unknown as FinalizePlanArgs);
 
         default:
           throw new Error(`Unknown tool: ${name}`);
@@ -290,72 +458,25 @@ export function createMCPServer() {
 
 // Tool implementations
 
-async function getLocalProject(projectPath: string) {
-  const { db: projectDb } = createDatabase(
-    path.join(projectPath, ".ralph-looper", "database.sqlite")
-  );
-  const localProject = await queries.getProjectByPath(projectDb, projectPath);
-
-  if (!localProject) {
-    return null;
-  }
-
-  return { db: projectDb, project: localProject };
-}
-
-async function getCurrentProject() {
-  const db = getGlobalDb();
-  const project = await queries.getActiveProject(db);
+async function getCurrentProjectHandler() {
+  const project = getCurrentProject();
 
   if (!project) {
     return {
       content: [
         {
           type: "text",
-          text: JSON.stringify({ error: "No active project found" }),
+          text: JSON.stringify({
+            error: "Not a daisy project. Run 'daisy init' first.",
+          }),
         },
       ],
     };
   }
 
-  // Get local project for stats
-  const local = await getLocalProject(project.path);
-
-  interface ProjectStats {
-    sections: { total: number; completed: number; pending: number };
-    items: {
-      total: number;
-      completed: number;
-      pending: number;
-      skipped: number;
-    };
-    iterations: { total: number; completed: number };
-    usage: {
-      totalInputTokens: number;
-      totalOutputTokens: number;
-      totalCacheCreateTokens: number;
-      totalCacheReadTokens: number;
-      totalCostUsd: number | null;
-      totalIterations: number;
-    } | null;
-  }
-
-  const stats: ProjectStats = {
-    sections: { total: 0, completed: 0, pending: 0 },
-    items: { total: 0, completed: 0, pending: 0, skipped: 0 },
-    iterations: { total: 0, completed: 0 },
-    usage: null,
-  };
-  if (local) {
-    const projectStats = await queries.getProjectStats(
-      local.db,
-      local.project.id
-    );
-    stats.sections = projectStats.sections;
-    stats.items = projectStats.items;
-    stats.iterations = projectStats.iterations;
-    stats.usage = projectStats.usage;
-  }
+  // Get task stats
+  const taskStats = getTaskStats(project.path);
+  const config = getConfig(project.path);
 
   return {
     content: [
@@ -363,15 +484,11 @@ async function getCurrentProject() {
         type: "text",
         text: JSON.stringify(
           {
-            id: project.id,
             name: project.name,
-            description: project.description,
             path: project.path,
+            config,
             stats: {
-              sections: stats.sections,
-              items: stats.items,
-              iterations: stats.iterations,
-              usage: stats.usage,
+              tasks: taskStats,
             },
           },
           null,
@@ -383,175 +500,188 @@ async function getCurrentProject() {
 }
 
 async function listTasks(args: ListTasksArgs | undefined) {
-  const db = getGlobalDb();
-  const project = await queries.getActiveProject(db);
+  const project = getCurrentProject();
 
   if (!project) {
     return {
       content: [
         {
           type: "text",
-          text: JSON.stringify({ error: "No active project found" }),
+          text: JSON.stringify({
+            error: "Not a daisy project. Run 'daisy init' first.",
+          }),
         },
       ],
     };
   }
 
-  const local = await getLocalProject(project.path);
-  if (!local) {
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify({ error: "No local project found" }),
-        },
-      ],
-    };
-  }
+  let tasks = getTasks(project.path);
 
-  const sections = await queries.getSectionsByProject(
-    local.db,
-    local.project.id
-  );
-
-  const result: SectionWithItems[] = [];
-
-  for (const section of sections) {
-    // Skip section if it doesn't match filter
-    if (args?.sectionId && section.externalId !== args.sectionId) {
-      continue;
+  // Filter by specific task ID
+  if (args?.taskId) {
+    const task = findTask(tasks, args.taskId);
+    if (!task) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({ error: `Task not found: ${args.taskId}` }),
+          },
+        ],
+      };
     }
+    tasks = [task];
+  }
 
-    const items = await queries.getItemsBySection(local.db, section.id);
-    const filteredItems = args?.status
-      ? items.filter((i) => i.status === args.status)
-      : items;
+  // Flatten if requested
+  if (args?.flat) {
+    tasks = flattenTasks(tasks);
+  }
 
-    result.push({
-      id: section.externalId,
-      name: section.name,
-      status: section.status,
-      items: filteredItems.map((item) => ({
-        text: item.text,
-        status: item.status,
-        note: item.note,
-      })),
-    });
+  // Filter by status
+  if (args?.status) {
+    const filterTasks = (taskList: Task[]): Task[] => {
+      return taskList.filter((t) => {
+        if (t.status === args.status) return true;
+        // For non-flat, still include parents that have matching children
+        if (!args.flat && t.tasks && t.tasks.length > 0) {
+          const filteredChildren = filterTasks(t.tasks);
+          if (filteredChildren.length > 0) {
+            t.tasks = filteredChildren;
+            return true;
+          }
+        }
+        return false;
+      });
+    };
+    tasks = filterTasks(tasks);
   }
 
   return {
     content: [
       {
         type: "text",
-        text: JSON.stringify(result, null, 2),
+        text: JSON.stringify(tasks, null, 2),
       },
     ],
   };
 }
 
-async function getTaskStatus() {
-  const db = getGlobalDb();
-  const project = await queries.getActiveProject(db);
+async function getNextTaskHandler() {
+  const project = getCurrentProject();
 
   if (!project) {
     return {
       content: [
         {
           type: "text",
-          text: JSON.stringify({ error: "No active project found" }),
+          text: JSON.stringify({
+            error: "Not a daisy project. Run 'daisy init' first.",
+          }),
         },
       ],
     };
   }
 
-  const statusPath = path.join(project.path, ".ralph-looper", "status.json");
+  const nextTask = getNextTask(project.path);
 
-  if (!existsSync(statusPath)) {
+  if (!nextTask) {
     return {
       content: [
         {
           type: "text",
-          text: JSON.stringify({ error: "No status file found" }),
+          text: JSON.stringify({
+            message:
+              "No available tasks. All tasks may be completed, blocked, or have unmet dependencies.",
+          }),
         },
       ],
     };
   }
-
-  const statusData = JSON.parse(
-    require("node:fs").readFileSync(statusPath, "utf-8")
-  );
 
   return {
     content: [
       {
         type: "text",
-        text: JSON.stringify(statusData, null, 2),
+        text: JSON.stringify(nextTask, null, 2),
       },
     ],
   };
 }
 
-async function updateTaskStatus(args: UpdateTaskStatusArgs) {
-  const db = getGlobalDb();
-  const project = await queries.getActiveProject(db);
+async function updateTaskStatusHandler(args: UpdateTaskStatusArgs) {
+  const project = getCurrentProject();
 
   if (!project) {
     return {
       content: [
         {
           type: "text",
-          text: JSON.stringify({ error: "No active project found" }),
+          text: JSON.stringify({
+            error: "Not a daisy project. Run 'daisy init' first.",
+          }),
         },
       ],
     };
   }
 
-  const local = await getLocalProject(project.path);
-  if (!local) {
+  // Find the task first to get its title for the response
+  const tasks = getTasks(project.path);
+  const task = findTask(tasks, args.taskId);
+
+  if (!task) {
     return {
       content: [
         {
           type: "text",
-          text: JSON.stringify({ error: "No local project found" }),
+          text: JSON.stringify({ error: `Task not found: ${args.taskId}` }),
         },
       ],
     };
   }
 
-  // Get section by external ID
-  const section = await queries.getSectionByExternalId(
-    local.db,
-    local.project.id,
-    args.sectionId
-  );
-  if (!section) {
+  // Update the task status
+  const success = updateTaskStatus(project.path, args.taskId, args.status, {
+    skipReason: args.skipReason,
+    completionSummary: args.completionSummary,
+  });
+
+  if (!success) {
     return {
       content: [
         {
           type: "text",
-          text: JSON.stringify({ error: "Section not found" }),
+          text: JSON.stringify({ error: "Failed to update task status" }),
         },
       ],
     };
   }
 
-  // Get items in section
-  const items = await queries.getItemsBySection(local.db, section.id);
-  const item = items[args.itemIndex];
+  // Write signal file to notify TUI of task update
+  writeSignal(project.path, "task_updated", {
+    taskId: args.taskId,
+    status: args.status,
+    taskTitle: task.title,
+  });
 
-  if (!item) {
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify({ error: "Item not found" }),
-        },
-      ],
-    };
+  // If task was completed, also signal iteration complete
+  if (args.status === "completed") {
+    // Check if all tasks are completed
+    const stats = getTaskStats(project.path);
+    if (stats.pending === 0 && stats.inProgress === 0) {
+      writeSignal(project.path, "all_complete", {
+        taskId: args.taskId,
+        taskTitle: task.title,
+        reason: "All tasks completed",
+      });
+    } else {
+      writeSignal(project.path, "iteration_complete", {
+        taskId: args.taskId,
+        taskTitle: task.title,
+        reason: `Task "${task.title}" completed`,
+      });
+    }
   }
-
-  // Update item status
-  await queries.updateItemStatus(local.db, item.id, args.status, args.note);
 
   return {
     content: [
@@ -559,112 +689,42 @@ async function updateTaskStatus(args: UpdateTaskStatusArgs) {
         type: "text",
         text: JSON.stringify({
           success: true,
-          message: `Task "${item.text}" status updated to ${args.status}`,
+          message: `Task "${task.title}" status updated to ${args.status}`,
         }),
       },
     ],
   };
 }
 
-async function updateSectionStatus(args: UpdateSectionStatusArgs) {
-  const db = getGlobalDb();
-  const project = await queries.getActiveProject(db);
+async function getStats() {
+  const project = getCurrentProject();
 
   if (!project) {
     return {
       content: [
         {
           type: "text",
-          text: JSON.stringify({ error: "No active project found" }),
+          text: JSON.stringify({
+            error: "Not a daisy project. Run 'daisy init' first.",
+          }),
         },
       ],
     };
   }
 
-  const local = await getLocalProject(project.path);
-  if (!local) {
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify({ error: "No local project found" }),
-        },
-      ],
-    };
-  }
-
-  // Get section by external ID
-  const section = await queries.getSectionByExternalId(
-    local.db,
-    local.project.id,
-    args.sectionId
-  );
-  if (!section) {
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify({ error: "Section not found" }),
-        },
-      ],
-    };
-  }
-
-  // Update section status
-  await queries.updateSection(local.db, section.id, { status: args.status });
+  const taskStats = getTaskStats(project.path);
 
   return {
     content: [
       {
         type: "text",
-        text: JSON.stringify({
-          success: true,
-          message: `Section "${section.name}" status updated to ${args.status}`,
-        }),
-      },
-    ],
-  };
-}
-
-async function updateProgress(args: UpdateProgressArgs) {
-  const db = getGlobalDb();
-  const project = await queries.getActiveProject(db);
-
-  if (!project) {
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify({ error: "No active project found" }),
-        },
-      ],
-    };
-  }
-
-  // Update status.json file
-  const statusPath = path.join(project.path, ".ralph-looper", "status.json");
-  const statusData = {
-    sectionId: args.sectionId,
-    sectionName: args.sectionName,
-    phase: args.phase,
-    message: args.message,
-    itemsTotal: args.itemsTotal,
-    itemsCompleted: args.itemsCompleted,
-  };
-
-  require("node:fs").writeFileSync(
-    statusPath,
-    JSON.stringify(statusData, null, 2)
-  );
-
-  return {
-    content: [
-      {
-        type: "text",
-        text: JSON.stringify({
-          success: true,
-          message: "Progress updated",
-        }),
+        text: JSON.stringify(
+          {
+            tasks: taskStats,
+          },
+          null,
+          2
+        ),
       },
     ],
   };
@@ -679,7 +739,7 @@ async function startIteration(args: StartIterationArgs) {
         type: "text",
         text: JSON.stringify({
           message:
-            "To start iterations, use the CLI: ralph-looper run " +
+            "To start iterations, use the CLI: daisy run " +
             (args.maxIterations || 10),
         }),
       },
@@ -687,64 +747,352 @@ async function startIteration(args: StartIterationArgs) {
   };
 }
 
-async function getIterationStats(_args?: ToolArgs) {
-  const db = getGlobalDb();
-  const project = await queries.getActiveProject(db);
+async function signalIterationComplete(args: SignalIterationCompleteArgs) {
+  const project = getCurrentProject();
 
   if (!project) {
     return {
       content: [
         {
           type: "text",
-          text: JSON.stringify({ error: "No active project found" }),
+          text: JSON.stringify({
+            error: "Not a daisy project. Run 'daisy init' first.",
+          }),
         },
       ],
     };
   }
 
-  const local = await getLocalProject(project.path);
-  if (!local) {
+  // Check if completeLoop is explicitly requested (for open-ended loops)
+  if (args.completeLoop) {
+    writeSignal(project.path, "loop_complete", {
+      reason: args.reason || "Loop completed by request",
+    });
+
     return {
       content: [
         {
           type: "text",
-          text: JSON.stringify({ error: "No local project found" }),
+          text: JSON.stringify({
+            success: true,
+            message: "Signaled loop complete. Loop will end.",
+            action: "loop_complete",
+          }),
         },
       ],
     };
   }
 
-  const iterations = await queries.getIterationsByProject(
-    local.db,
-    local.project.id
-  );
-  const usage = await queries.getUsageByProject(local.db, local.project.id);
+  // Check if all tasks are complete (for task-based loops)
+  const stats = getTaskStats(project.path);
+  const allComplete = stats.pending === 0 && stats.inProgress === 0;
+
+  // Write the appropriate signal
+  const action: SignalAction = allComplete
+    ? "all_complete"
+    : "iteration_complete";
+  writeSignal(project.path, action, {
+    reason:
+      args.reason ||
+      (allComplete ? "All tasks completed" : "Iteration complete"),
+  });
 
   return {
     content: [
       {
         type: "text",
-        text: JSON.stringify(
-          {
-            totalIterations: iterations.length,
-            completedIterations: iterations.filter(
-              (i) => i.status === "completed"
-            ).length,
-            latestIteration: iterations[0] || null,
-            usage: usage
-              ? {
-                  totalInputTokens: usage.totalInputTokens,
-                  totalOutputTokens: usage.totalOutputTokens,
-                  totalCacheCreateTokens: usage.totalCacheCreateTokens,
-                  totalCacheReadTokens: usage.totalCacheReadTokens,
-                  totalCostUsd: usage.totalCostUsd,
-                  totalIterations: usage.totalIterations,
-                }
-              : null,
+        text: JSON.stringify({
+          success: true,
+          message: allComplete
+            ? "Signaled all tasks complete. Loop will end."
+            : "Signaled iteration complete. Moving to next iteration.",
+          action,
+        }),
+      },
+    ],
+  };
+}
+
+// ============================================================================
+// Planning Mode Tool Handlers
+// ============================================================================
+
+async function addTaskHandler(args: AddTaskArgs) {
+  const project = getCurrentProject();
+
+  if (!project) {
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            error: "Not a daisy project. Run 'daisy init' first.",
+          }),
+        },
+      ],
+    };
+  }
+
+  // Create the task object
+  const task: Task = {
+    id: args.id,
+    title: args.title,
+    status: "pending",
+    description: args.description,
+    dependsOn: args.dependsOn,
+    acceptanceCriteria: args.acceptanceCriteria,
+  };
+
+  // Insert with optional positioning
+  const result = insertTask(project.path, task, args.parentId, {
+    afterId: args.afterId,
+    beforeId: args.beforeId,
+  });
+
+  if (!result.success) {
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            error: result.error,
+          }),
+        },
+      ],
+    };
+  }
+
+  // Signal task update for TUI
+  writeSignal(project.path, "task_updated", {
+    taskId: args.id,
+    taskTitle: args.title,
+    reason: "Task added during planning",
+  });
+
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify({
+          success: true,
+          message: `Task "${args.id}" added successfully`,
+          task: {
+            id: args.id,
+            title: args.title,
+            parentId: args.parentId,
+            dependsOn: args.dependsOn,
           },
-          null,
-          2
-        ),
+        }),
+      },
+    ],
+  };
+}
+
+async function updatePlanTaskHandler(args: UpdatePlanTaskArgs) {
+  const project = getCurrentProject();
+
+  if (!project) {
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            error: "Not a daisy project. Run 'daisy init' first.",
+          }),
+        },
+      ],
+    };
+  }
+
+  const updates: Partial<
+    Pick<Task, "title" | "description" | "dependsOn" | "acceptanceCriteria">
+  > = {};
+
+  if (args.title !== undefined) updates.title = args.title;
+  if (args.description !== undefined) updates.description = args.description;
+  if (args.dependsOn !== undefined) updates.dependsOn = args.dependsOn;
+  if (args.acceptanceCriteria !== undefined) {
+    updates.acceptanceCriteria = args.acceptanceCriteria;
+  }
+
+  const result = updateTask(project.path, args.taskId, updates);
+
+  if (!result.success) {
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            error: result.error,
+          }),
+        },
+      ],
+    };
+  }
+
+  // Signal task update for TUI
+  writeSignal(project.path, "task_updated", {
+    taskId: args.taskId,
+    taskTitle: args.title,
+    reason: "Task updated during planning",
+  });
+
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify({
+          success: true,
+          message: `Task "${args.taskId}" updated successfully`,
+          updatedFields: Object.keys(updates),
+        }),
+      },
+    ],
+  };
+}
+
+async function removeTaskHandler(args: RemoveTaskArgs) {
+  const project = getCurrentProject();
+
+  if (!project) {
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            error: "Not a daisy project. Run 'daisy init' first.",
+          }),
+        },
+      ],
+    };
+  }
+
+  const result = removeTaskCascade(project.path, args.taskId);
+
+  if (!result.success) {
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            error: result.error,
+          }),
+        },
+      ],
+    };
+  }
+
+  // Signal task update for TUI
+  writeSignal(project.path, "task_updated", {
+    taskId: args.taskId,
+    reason: args.reason || "Task removed during planning",
+  });
+
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify({
+          success: true,
+          message: `Task "${args.taskId}" removed successfully`,
+          removedCount: result.removedCount,
+          reason: args.reason,
+        }),
+      },
+    ],
+  };
+}
+
+async function listPlanTasksHandler(args: ListPlanTasksArgs) {
+  const project = getCurrentProject();
+
+  if (!project) {
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            error: "Not a daisy project. Run 'daisy init' first.",
+          }),
+        },
+      ],
+    };
+  }
+
+  const tasks = getTasks(project.path);
+  const format = args.format || "tree";
+  const formatted = formatTaskTree(tasks, format);
+  const stats = getTaskStats(project.path);
+
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify({
+          format,
+          taskCount: stats.total,
+          tasks: format === "tree" ? formatted : undefined,
+          taskList: format === "flat" ? formatted : undefined,
+          summary: format === "summary" ? formatted : undefined,
+          rawTasks: tasks,
+        }),
+      },
+    ],
+  };
+}
+
+async function finalizePlanHandler(args: FinalizePlanArgs) {
+  const project = getCurrentProject();
+
+  if (!project) {
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            error: "Not a daisy project. Run 'daisy init' first.",
+          }),
+        },
+      ],
+    };
+  }
+
+  // Validate the task tree
+  const validation = validateTaskTree(project.path);
+
+  if (!validation.valid) {
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            error: "Task tree validation failed",
+            errors: validation.errors,
+            warnings: validation.warnings,
+          }),
+        },
+      ],
+    };
+  }
+
+  const stats = getTaskStats(project.path);
+
+  // Write signal to indicate planning is complete
+  writeSignal(project.path, "all_complete", {
+    reason: `Planning finalized: ${args.summary}`,
+  });
+
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify({
+          success: true,
+          message: "Planning session finalized",
+          summary: args.summary,
+          taskCount: stats.total,
+          warnings: validation.warnings,
+        }),
       },
     ],
   };
