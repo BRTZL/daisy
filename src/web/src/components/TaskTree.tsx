@@ -14,8 +14,8 @@ import {
 import { useEffect, useState } from "react";
 import { api, type Task } from "../lib/api";
 
-// Find all parent IDs that should be expanded because they contain an in_progress task
-function findParentsOfInProgress(tasks: Task[], parentIds: string[] = []): Set<string> {
+// Find all task IDs that should be expanded (in_progress tasks and their parents)
+function findTasksToExpand(tasks: Task[], parentIds: string[] = []): Set<string> {
   const result = new Set<string>();
 
   for (const task of tasks) {
@@ -24,11 +24,13 @@ function findParentsOfInProgress(tasks: Task[], parentIds: string[] = []): Set<s
       for (const parentId of parentIds) {
         result.add(parentId);
       }
+      // Also expand the in_progress task itself (to show its children if any)
+      result.add(task.id);
     }
 
     // Recurse into children
     if (task.tasks && task.tasks.length > 0) {
-      const childResults = findParentsOfInProgress(task.tasks, [...parentIds, task.id]);
+      const childResults = findTasksToExpand(task.tasks, [...parentIds, task.id]);
       for (const id of childResults) {
         result.add(id);
       }
@@ -80,13 +82,13 @@ export function TaskTree({ projectPath }: TaskTreeProps) {
     refetchInterval: 5000,
   });
 
-  // Auto-expand parents of in_progress tasks
+  // Auto-expand in_progress tasks and their parents
   useEffect(() => {
-    const parentsToExpand = findParentsOfInProgress(tasks);
-    if (parentsToExpand.size > 0) {
+    const tasksToExpand = findTasksToExpand(tasks);
+    if (tasksToExpand.size > 0) {
       setExpandedIds((prev) => {
         const next = new Set(prev);
-        for (const id of parentsToExpand) {
+        for (const id of tasksToExpand) {
           next.add(id);
         }
         return next;
