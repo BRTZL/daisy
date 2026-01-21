@@ -79,16 +79,16 @@ export function useWebSocket() {
       case "iteration-complete": {
         const data = message.data as {
           iteration: number;
-          usage: { inputTokens: number; outputTokens: number; costUsd: number };
+          usage?: { inputTokens?: number; outputTokens?: number; costUsd?: number };
           complete: boolean;
         };
         setLoopStatus((prev) => ({
           ...prev,
           iteration: data.iteration,
           usage: {
-            inputTokens: prev.usage.inputTokens + data.usage.inputTokens,
-            outputTokens: prev.usage.outputTokens + data.usage.outputTokens,
-            costUsd: prev.usage.costUsd + data.usage.costUsd,
+            inputTokens: prev.usage.inputTokens + (data.usage?.inputTokens ?? 0),
+            outputTokens: prev.usage.outputTokens + (data.usage?.outputTokens ?? 0),
+            costUsd: prev.usage.costUsd + (data.usage?.costUsd ?? 0),
           },
           running: !data.complete,
         }));
@@ -113,7 +113,15 @@ export function useWebSocket() {
 
       case "loop-status": {
         const data = message.data as LoopStatus;
-        setLoopStatus(data);
+        // Ensure usage is always defined with defaults
+        setLoopStatus({
+          ...data,
+          usage: {
+            inputTokens: data.usage?.inputTokens ?? 0,
+            outputTokens: data.usage?.outputTokens ?? 0,
+            costUsd: data.usage?.costUsd ?? 0,
+          },
+        });
         break;
       }
 

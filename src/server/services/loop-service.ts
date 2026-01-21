@@ -6,7 +6,7 @@
 
 import { type ChildProcess, spawn, spawnSync } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { existsSync, type FSWatcher, mkdirSync, readFileSync, watch, writeFileSync } from "node:fs";
+import { existsSync, type FSWatcher, readFileSync, watch } from "node:fs";
 import path from "node:path";
 
 /**
@@ -42,15 +42,16 @@ function getClaudePath(): string {
 import { StreamParser } from "../../core/parser.js";
 import {
   addSession,
+  generateSessionId,
+  updateSession,
+} from "../../storage/global.js";
+import {
   clearSignal,
   flattenTasks,
-  generateSessionId,
-  getConfig,
   getNextTask,
   getTaskStats,
   getTasks,
   readSignal,
-  updateSession,
 } from "../../storage/project.js";
 import type { LoopSession } from "../../storage/types.js";
 
@@ -371,42 +372,13 @@ export class LoopService extends EventEmitter {
       // Generate prompt
       const prompt = this.generatePrompt();
 
-      // Write prompt to temp file for debugging
-      const tempDir = path.join(projectPath, ".daisy", ".temp");
-      if (!existsSync(tempDir)) {
-        mkdirSync(tempDir, { recursive: true });
-      }
-      writeFileSync(
-        path.join(tempDir, `iteration-${this.status.iteration}-prompt.md`),
-        prompt
-      );
-
-      // Create MCP config for daisy-mcp server
-      const mcpConfigPath = path.join(tempDir, "mcp-config.json");
-      // From dist/server/index.js, we need to reach dist/mcp/index.js (one level up)
-      const daisyMcpPath = path.join(path.dirname(new URL(import.meta.url).pathname), "../mcp/index.js");
-      const mcpConfig = {
-        mcpServers: {
-          "daisy": {
-            command: "node",
-            args: [daisyMcpPath],
-            env: {
-              DAISY_PROJECT_PATH: projectPath,
-            },
-          },
-        },
-      };
-      writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2));
-
-      // Build Claude args
+      // Build Claude args (MCP config is read from .mcp.json in project root)
       const args = [
         "-p",
         prompt,
         "--output-format",
         "stream-json",
         "--verbose",
-        "--mcp-config",
-        mcpConfigPath,
       ];
       if (this.skipPermissions) {
         args.push("--dangerously-skip-permissions");
@@ -483,7 +455,15 @@ export class LoopService extends EventEmitter {
           }
 
           if (result.toolName) {
-            this.log(`→ ${result.toolName}`, "info");
+            // Include tool input for all tools to show params in UI
+            if (result.toolInput) {
+              this.log(
+                `→ ${result.toolName}|${JSON.stringify(result.toolInput)}`,
+                "info"
+              );
+            } else {
+              this.log(`→ ${result.toolName}`, "info");
+            }
           }
         }
       });
@@ -549,7 +529,6 @@ export class LoopService extends EventEmitter {
    */
   private generatePrompt(): string {
     const projectPath = this.projectPath!;
-    const _config = getConfig(projectPath);
 
     // Read base prompt
     const promptPath = path.join(projectPath, ".daisy", "PROMPT.md");

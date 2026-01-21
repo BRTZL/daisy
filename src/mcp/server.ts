@@ -16,7 +16,6 @@ import {
   findTask,
   flattenTasks,
   formatTaskTree,
-  getConfig,
   getCurrentProject,
   getNextTask,
   getProjectDir,
@@ -28,6 +27,7 @@ import {
   updateTaskStatus,
   validateTaskTree,
 } from "../storage/project.js";
+import { getProjectSettings } from "../storage/global.js";
 import {
   FILES,
   type Signal,
@@ -476,7 +476,7 @@ async function getCurrentProjectHandler() {
 
   // Get task stats
   const taskStats = getTaskStats(project.path);
-  const config = getConfig(project.path);
+  const settings = getProjectSettings(project.path);
 
   return {
     content: [
@@ -486,7 +486,7 @@ async function getCurrentProjectHandler() {
           {
             name: project.name,
             path: project.path,
-            config,
+            settings,
             stats: {
               tasks: taskStats,
             },

@@ -106,10 +106,11 @@ export class PlanningService {
       }
 
       // Add assistant message
+      const messageContent = response.message ?? "";
       const assistantMsg: PlanningMessage = {
         id: `msg-${this.messageIdCounter++}`,
         role: "assistant",
-        content: response.message,
+        content: messageContent,
         timestamp: new Date().toISOString(),
         tasks:
           Object.keys(taskChanges).length > 0 ? taskChanges : undefined,
@@ -117,7 +118,7 @@ export class PlanningService {
       this.messages.push(assistantMsg);
 
       return {
-        response: response.message,
+        response: messageContent,
         tasks: this.session.getTasks(),
         done: response.done,
       };

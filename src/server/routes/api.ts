@@ -8,15 +8,16 @@ import { Hono } from "hono";
 import {
   addKnownProject,
   getCurrentProjectPath,
+  getHistory,
   getKnownProjects,
+  getProjectSettings,
   removeKnownProject,
   setCurrentProject as setGlobalCurrentProject,
+  updateProjectSettings,
 } from "../../storage/global.js";
 import {
   findProjectRoot,
   findTask,
-  getConfig,
-  getHistory,
   getTaskStats,
   getTasks,
   insertTask,
@@ -67,14 +68,14 @@ export function createApiRoutes(loopService: LoopService) {
       return c.json({ error: "No project found" }, 404);
     }
 
-    const config = getConfig(projectPath);
+    const settings = getProjectSettings(projectPath);
     const stats = getTaskStats(projectPath);
     const name = projectPath.split("/").pop() || "unknown";
 
     return c.json({
       name,
       path: projectPath,
-      config,
+      settings,
       stats,
     });
   });
@@ -105,7 +106,7 @@ export function createApiRoutes(loopService: LoopService) {
     addKnownProject(projectPath);
     setGlobalCurrentProject(projectPath);
 
-    const config = getConfig(projectPath);
+    const settings = getProjectSettings(projectPath);
     const stats = getTaskStats(projectPath);
     const name = projectPath.split("/").pop() || "unknown";
 
@@ -114,7 +115,7 @@ export function createApiRoutes(loopService: LoopService) {
       project: {
         name,
         path: projectPath,
-        config,
+        settings,
         stats,
       },
     });
@@ -318,18 +319,24 @@ export function createApiRoutes(loopService: LoopService) {
   // ============================================================================
 
   api.get("/settings", async (c) => {
-    // TODO: Implement settings storage
-    return c.json({
-      skipPermissions: false,
-      defaultMaxIterations: null,
-      notifications: true,
-    });
+    const projectPath = getProjectPath();
+    if (!projectPath) {
+      return c.json({ error: "No project found" }, 404);
+    }
+
+    const settings = getProjectSettings(projectPath);
+    return c.json(settings);
   });
 
   api.put("/settings", async (c) => {
+    const projectPath = getProjectPath();
+    if (!projectPath) {
+      return c.json({ error: "No project found" }, 404);
+    }
+
     const body = await c.req.json();
-    // TODO: Implement settings storage
-    return c.json(body);
+    const updated = updateProjectSettings(projectPath, body);
+    return c.json(updated);
   });
 
   // ============================================================================

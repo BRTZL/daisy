@@ -3,8 +3,6 @@ import { dirname, join, resolve } from "node:path";
 import {
   DEFAULTS,
   FILES,
-  type LoopSession,
-  type ProjectConfig,
   type Signal,
   type SignalAction,
   type Task,
@@ -12,6 +10,7 @@ import {
   type TaskStatus,
   type TaskValidationResult,
 } from "./types.js";
+import { getProjectSettings } from "./global.js";
 
 /**
  * Get the .daisy directory for a project
@@ -32,10 +31,10 @@ export function ensureProjectDir(projectPath: string): void {
 
 /**
  * Check if a path is an initialized daisy project
+ * Now checks for .daisy directory existence instead of config.json
  */
 export function isProject(projectPath: string): boolean {
-  const configPath = join(getProjectDir(projectPath), FILES.projectConfig);
-  return existsSync(configPath);
+  return existsSync(getProjectDir(projectPath));
 }
 
 /**
@@ -70,48 +69,6 @@ export function findProjectRoot(startPath?: string): string | null {
   }
 
   return null;
-}
-
-// ============================================================================
-// Config Management
-// ============================================================================
-
-/**
- * Get project configuration
- */
-export function getConfig(projectPath: string): ProjectConfig {
-  const configPath = join(getProjectDir(projectPath), FILES.projectConfig);
-
-  if (!existsSync(configPath)) {
-    return {};
-  }
-
-  try {
-    const content = readFileSync(configPath, "utf-8");
-    return JSON.parse(content) as ProjectConfig;
-  } catch {
-    return {};
-  }
-}
-
-/**
- * Save project configuration
- */
-export function saveConfig(projectPath: string, config: ProjectConfig): void {
-  ensureProjectDir(projectPath);
-  const configPath = join(getProjectDir(projectPath), FILES.projectConfig);
-  writeFileSync(configPath, JSON.stringify(config, null, 2), "utf-8");
-}
-
-/**
- * Get a config value with defaults
- */
-export function getConfigValue<K extends keyof ProjectConfig>(
-  projectPath: string,
-  key: K
-): ProjectConfig[K] {
-  const config = getConfig(projectPath);
-  return config[key];
 }
 
 // ============================================================================
@@ -215,8 +172,40 @@ export function updateTaskStatus(
     result.task.skipReason = extra.skipReason;
   }
 
+  // Auto-complete parent tasks if all children are completed
+  autoCompleteParentTasks(tasks);
+
   saveTasks(projectPath, tasks);
   return true;
+}
+
+/**
+ * Auto-complete parent tasks when all their children are completed
+ * Recursively updates parent task status based on child completion
+ */
+function autoCompleteParentTasks(tasks: Task[]): void {
+  for (const task of tasks) {
+    // Only process parent tasks (tasks with children)
+    if (task.tasks && task.tasks.length > 0) {
+      // Recursively check children first
+      autoCompleteParentTasks(task.tasks);
+
+      // Check if all children are completed
+      const allChildrenCompleted = task.tasks.every(
+        (child) => child.status === "completed"
+      );
+
+      // Auto-complete parent if all children are completed and parent is not already completed
+      if (allChildrenCompleted && task.status !== "completed") {
+        task.status = "completed";
+        task.updatedAt = new Date().toISOString();
+        task.completedAt = new Date().toISOString();
+        task.completionSummary =
+          task.completionSummary ||
+          "Auto-completed: all child tasks completed";
+      }
+    }
+  }
 }
 
 /**
@@ -306,14 +295,24 @@ function removeTaskFromArray(tasks: Task[], id: string): boolean {
 
 /**
  * Get all tasks flattened (for iteration/counting)
+ * @param tasks - Task array to flatten
+ * @param includeParents - If false, excludes tasks that have children (parent tasks)
  */
-export function flattenTasks(tasks: Task[]): Task[] {
+export function flattenTasks(tasks: Task[], includeParents = true): Task[] {
   const result: Task[] = [];
 
   for (const task of tasks) {
-    result.push(task);
+    // Include this task if:
+    // - includeParents is true, OR
+    // - task has no children (is a leaf task)
+    const isLeaf = !task.tasks || task.tasks.length === 0;
+    if (includeParents || isLeaf) {
+      result.push(task);
+    }
+
+    // Recursively flatten children
     if (task.tasks) {
-      result.push(...flattenTasks(task.tasks));
+      result.push(...flattenTasks(task.tasks, includeParents));
     }
   }
 
@@ -343,14 +342,15 @@ export function areDependenciesMet(tasks: Task[], task: Task): boolean {
 /**
  * Get the next available task to work on
  * (pending, dependencies met, not exceeded max attempts)
+ * Only returns leaf tasks (tasks without children) - parent tasks are skipped
  */
 export function getNextTask(projectPath: string): Task | null {
   const tasks = getTasks(projectPath);
-  const config = getConfig(projectPath);
-  const maxAttempts =
-    config.loop?.maxAttemptsPerTask || DEFAULTS.maxAttemptsPerTask;
+  const settings = getProjectSettings(projectPath);
+  const maxAttempts = settings.maxAttemptsPerTask || DEFAULTS.maxAttemptsPerTask;
 
-  const allTasks = flattenTasks(tasks);
+  // Get only leaf tasks (excludes parent tasks with children)
+  const allTasks = flattenTasks(tasks, false);
 
   for (const task of allTasks) {
     // Skip if not pending
@@ -863,101 +863,3 @@ export function clearSignal(projectPath: string): void {
   }
 }
 
-// ============================================================================
-// History Management
-// ============================================================================
-
-const HISTORY_FILE = "history.json";
-const MAX_HISTORY_ENTRIES = 100;
-
-/**
- * Get all session history for a project
- */
-export function getHistory(projectPath: string): LoopSession[] {
-  const historyPath = join(getProjectDir(projectPath), HISTORY_FILE);
-
-  if (!existsSync(historyPath)) {
-    return [];
-  }
-
-  try {
-    const content = readFileSync(historyPath, "utf-8");
-    const data = JSON.parse(content);
-    return Array.isArray(data.sessions) ? data.sessions : [];
-  } catch {
-    return [];
-  }
-}
-
-/**
- * Save session history
- */
-function saveHistory(projectPath: string, sessions: LoopSession[]): void {
-  ensureProjectDir(projectPath);
-  const historyPath = join(getProjectDir(projectPath), HISTORY_FILE);
-  writeFileSync(
-    historyPath,
-    JSON.stringify({ sessions }, null, 2),
-    "utf-8"
-  );
-}
-
-/**
- * Add a new session to history
- */
-export function addSession(
-  projectPath: string,
-  session: LoopSession
-): void {
-  const sessions = getHistory(projectPath);
-
-  // Add new session at the beginning
-  sessions.unshift(session);
-
-  // Trim to max entries
-  if (sessions.length > MAX_HISTORY_ENTRIES) {
-    sessions.length = MAX_HISTORY_ENTRIES;
-  }
-
-  saveHistory(projectPath, sessions);
-}
-
-/**
- * Update an existing session in history
- */
-export function updateSession(
-  projectPath: string,
-  sessionId: string,
-  updates: Partial<LoopSession>
-): boolean {
-  const sessions = getHistory(projectPath);
-  const index = sessions.findIndex((s) => s.id === sessionId);
-
-  if (index === -1) {
-    return false;
-  }
-
-  sessions[index] = { ...sessions[index], ...updates };
-  saveHistory(projectPath, sessions);
-  return true;
-}
-
-/**
- * Get a specific session by ID
- */
-export function getSession(
-  projectPath: string,
-  sessionId: string
-): LoopSession | null {
-  const sessions = getHistory(projectPath);
-  return sessions.find((s) => s.id === sessionId) || null;
-}
-
-/**
- * Generate a unique session ID
- */
-export function generateSessionId(): string {
-  const timestamp = Date.now().toString(36);
-  const random = Math.random().toString(36).substring(2, 8);
-  return `session-${timestamp}-${random}`;
-}

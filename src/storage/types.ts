@@ -44,42 +44,6 @@ export interface Task {
 }
 
 /**
- * Webhook configuration
- */
-export interface WebhookConfig {
-  /** Display name for the webhook */
-  name: string;
-  /** URL to send POST requests to */
-  url: string;
-  /** Events to trigger on (e.g., "task.completed", "milestone.completed") */
-  events: string[];
-  /** Whether the webhook is active */
-  active: boolean;
-  /** Optional secret for signing payloads */
-  secret?: string;
-}
-
-/**
- * Project configuration stored in .daisy/config.json
- */
-export interface ProjectConfig {
-  /** Loop execution settings */
-  loop?: {
-    /** Maximum iterations per run */
-    maxIterations?: number;
-    /** Max attempts per task before skipping */
-    maxAttemptsPerTask?: number;
-  };
-  /** Prompt template settings */
-  prompt?: {
-    /** Path to custom prompt template */
-    templatePath?: string;
-  };
-  /** Configured webhooks */
-  webhooks?: WebhookConfig[];
-}
-
-/**
  * Default values
  */
 export const DEFAULTS = {
@@ -91,7 +55,6 @@ export const DEFAULTS = {
  * File names used in .daisy/
  */
 export const FILES = {
-  projectConfig: "config.json",
   tasks: "tasks.json",
   signal: ".signal",
 } as const;

@@ -119,7 +119,7 @@ The `runIteration(iteration: number)` method:
 │     • Read base PROMPT.md                                   │
 │     • Get current task from storage                         │
 │     • Build dynamic prompt with task context                │
-│     • Write to .daisy/.temp/iteration-N-prompt.md           │
+│     • Write to .daisy/.temp/DAISY-LOOP-iter-N.md           │
 └───────────────────────────┬─────────────────────────────────┘
                             │
 ┌───────────────────────────▼─────────────────────────────────┐
@@ -221,12 +221,22 @@ When you complete this task:
 
 ### Prompt File Location
 
-Generated prompts are written to:
+Generated prompts are written to `.daisy/.temp/` with descriptive names for easy identification in process lists:
+
+**Task-based Loop:**
 ```
-.daisy/.temp/iteration-{N}-prompt.md
+.daisy/.temp/DAISY-LOOP-iter-{N}.md
 ```
 
-This allows debugging of what Claude received.
+**Open-ended Loop:**
+```
+.daisy/.temp/DAISY-OPEN-LOOP-iter-{N}.md
+```
+
+This allows:
+- Easy debugging of what Claude received
+- Identification of Daisy-managed Claude processes in Activity Monitor, `ps`, `top`, etc.
+  (The `-p` flag argument appears in process lists showing the full path)
 
 ## Stream Parser
 

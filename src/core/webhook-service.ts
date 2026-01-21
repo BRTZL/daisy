@@ -3,7 +3,7 @@
  */
 
 import crypto from "node:crypto";
-import type { WebhookConfig } from "../storage/types.js";
+import type { WebhookConfig } from "../storage/global.js";
 import type {
   WebhookDeliveryResult,
   WebhookEvent,

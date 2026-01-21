@@ -29,6 +29,7 @@ export interface ParseResult {
   type: string;
   text?: string;
   toolName?: string;
+  toolInput?: Record<string, unknown>;
   model?: string;
   sessionId?: string;
   inputTokens: number;
@@ -96,6 +97,9 @@ export function parseLine(line: string): ParseResult | null {
             case "tool_use":
               if (content.name) {
                 result.toolName = content.name;
+                if (content.input) {
+                  result.toolInput = content.input as Record<string, unknown>;
+                }
               }
               break;
           }

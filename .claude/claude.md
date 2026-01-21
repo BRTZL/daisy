@@ -73,12 +73,7 @@ src/
 │   │   ├── tasks.ts     # Task management
 │   │   ├── status.ts    # Project status
 │   │   ├── tui.ts       # Terminal UI
-│   │   ├── data.ts      # Import/export
-│   │   └── completions.ts # Shell completions
-│   └── completions/     # Shell completion scripts
-│       ├── bash.ts      # Bash completions
-│       ├── zsh.ts       # Zsh completions
-│       └── fish.ts      # Fish completions
+│   │   └── data.ts      # Import/export
 │
 ├── core/                 # Core business logic
 │   ├── loop-runner.ts   # LoopRunner class (EventEmitter)
@@ -334,11 +329,7 @@ chore: update dependencies
 
 1. **Command file** - Create/delete `src/cli/commands/your-command.ts`
 2. **CLI registration** - Add/remove import and `program.addCommand()` in `src/cli/index.ts`
-3. **Shell completions** - Update ALL three completion scripts:
-   - `src/cli/completions/bash.ts`
-   - `src/cli/completions/zsh.ts`
-   - `src/cli/completions/fish.ts`
-4. **Verify** - Run `daisy --help` and test completions work correctly
+3. **Verify** - Run `daisy --help` to confirm the command works correctly
 
 Example command structure:
 ```typescript

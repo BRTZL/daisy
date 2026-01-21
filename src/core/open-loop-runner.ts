@@ -18,7 +18,8 @@ import {
 } from "node:fs";
 import path from "node:path";
 
-import { FILES, type Signal, type WebhookConfig } from "../storage/types.js";
+import { FILES, type Signal } from "../storage/types.js";
+import type { WebhookConfig } from "../storage/global.js";
 import { type ParseResult, StreamParser } from "./parser.js";
 import type { TokenUsage } from "./types.js";
 import {
@@ -96,7 +97,7 @@ export class OpenLoopRunner extends EventEmitter {
    */
   private log(...args: unknown[]): void {
     if (!this.quiet) {
-      this.log(...args);
+      console.log(...args);
     }
   }
 
@@ -210,19 +211,8 @@ export class OpenLoopRunner extends EventEmitter {
     }
 
     return new Promise((resolve) => {
-      // Determine base prompt path
-      const defaultPromptPath = path.join(
-        this.projectPath,
-        ".daisy",
-        "PROMPT.md"
-      );
-      const basePromptPath = this.options.promptPath || defaultPromptPath;
-
-      // Generate dynamic prompt with activity log context
-      const promptPath = this.generateIterationPrompt(
-        iteration,
-        basePromptPath
-      );
+      // Use static base prompt path for all iterations
+      const promptPath = this.getPromptPath();
 
       // Build Claude command arguments
       const claudeArgs = [
@@ -524,77 +514,16 @@ export class OpenLoopRunner extends EventEmitter {
   }
 
   /**
-   * Generate a dynamic prompt for the current iteration
-   * Includes the base prompt and activity log for context
+   * Get the path to the base prompt file
+   * Uses the same prompt for all iterations
    */
-  private generateIterationPrompt(
-    iteration: number,
-    basePromptPath: string
-  ): string {
-    // Read base prompt
-    const basePrompt = existsSync(basePromptPath)
-      ? readFileSync(basePromptPath, "utf-8")
-      : "";
-
-    // Read activity log
-    const activityLog = this.readActivityLog();
-
-    // Build the dynamic prompt
-    const dynamicPrompt = `# Daisy Open Loop - Iteration ${iteration}
-
-You are in an open-ended development loop. Work continuously based on the instructions below.
-
----
-
-## Activity Log
-
-Previous activity from this session:
-
----
-${activityLog || "No previous activity recorded."}
----
-
-## Instructions
-
-1. Review the activity log above to understand what has been done
-2. Continue working on the project based on the base instructions below
-3. At the END of your work in this iteration, append a brief summary to \`.daisy/activity.md\`:
-   - What you accomplished
-   - What needs to be done next
-   - Any decisions or blockers
-4. Call \`signal_iteration_complete\` when ready for the next iteration
-5. Call \`signal_iteration_complete\` with \`completeLoop: true\` when ALL work is done
-
-## Activity Log Format
-
-When appending to \`.daisy/activity.md\`, use this format:
-
-\`\`\`markdown
-## Iteration ${iteration} - ${new Date().toISOString()}
-- Completed: [what you did]
-- Next: [what needs to happen next]
-- Notes: [any important observations]
-\`\`\`
-
----
-
-## Base Instructions
-
-${basePrompt}
-`;
-
-    // Write to temp file
-    const tempDir = path.join(this.projectPath, ".daisy", ".temp");
-    if (!existsSync(tempDir)) {
-      mkdirSync(tempDir, { recursive: true });
-    }
-    const tempPromptPath = path.join(
-      tempDir,
-      `open-loop-iteration-${iteration}-prompt.md`
+  private getPromptPath(): string {
+    const defaultPromptPath = path.join(
+      this.projectPath,
+      ".daisy",
+      "PROMPT.md"
     );
-    writeFileSync(tempPromptPath, dynamicPrompt, "utf-8");
-
-    return tempPromptPath;
+    return this.options.promptPath || defaultPromptPath;
   }
 }
 

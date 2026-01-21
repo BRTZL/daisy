@@ -21,12 +21,8 @@ import {
   getTaskStats,
   getTasks,
 } from "../storage/project.js";
-import {
-  FILES,
-  type Signal,
-  type Task,
-  type WebhookConfig,
-} from "../storage/types.js";
+import { FILES, type Signal, type Task } from "../storage/types.js";
+import type { WebhookConfig } from "../storage/global.js";
 import { type ParseResult, StreamParser } from "./parser.js";
 import type { TokenUsage } from "./types.js";
 import {
@@ -194,19 +190,11 @@ export class LoopRunner extends EventEmitter {
     }
 
     return new Promise((resolve) => {
-      // Determine base prompt path
-      const defaultPromptPath = path.join(
-        this.projectPath,
-        ".daisy",
-        "PROMPT.md"
-      );
-      const basePromptPath = this.options.promptPath || defaultPromptPath;
+      // Use static base prompt path for all iterations
+      const promptPath = this.getPromptPath();
 
-      // Generate dynamic prompt with task context
-      const { promptPath, currentTask } = this.generateIterationPrompt(
-        iteration,
-        basePromptPath
-      );
+      // Get current task just for logging
+      const currentTask = getNextTask(this.projectPath);
 
       // Log the current task being worked on
       if (currentTask) {
@@ -515,138 +503,16 @@ export class LoopRunner extends EventEmitter {
   }
 
   /**
-   * Generate a dynamic prompt for the current iteration
-   * This includes task context so Claude knows exactly what to work on
+   * Get the path to the base prompt file
+   * Uses the same prompt for all iterations
    */
-  private generateIterationPrompt(
-    iteration: number,
-    basePromptPath: string
-  ): { promptPath: string; currentTask: Task | null } {
-    // Read base prompt
-    const basePrompt = existsSync(basePromptPath)
-      ? readFileSync(basePromptPath, "utf-8")
-      : "";
-
-    // Get current task state
-    const currentTask = getNextTask(this.projectPath);
-    const tasks = getTasks(this.projectPath);
-    const stats = getTaskStats(this.projectPath);
-    const allTasks = flattenTasks(tasks);
-
-    // Categorize tasks
-    const completedTasks = allTasks.filter((t) => t.status === "completed");
-    const pendingTasks = allTasks.filter((t) => t.status === "pending");
-    const _inProgressTasks = allTasks.filter((t) => t.status === "in_progress");
-
-    // Build the dynamic prompt
-    let dynamicPrompt = `# Daisy Loop - Iteration ${iteration}
-
-## CRITICAL RULES - READ CAREFULLY
-
-**YOU MUST ONLY COMPLETE ONE TASK PER ITERATION.**
-
-This is iteration ${iteration}. You will be given ONE specific task to complete. Do NOT work on any other tasks. Do NOT implement features that belong to other tasks. After completing your assigned task, call \`signal_iteration_complete\` and STOP.
-
----
-
-## Current Task Status
-
-- **Total tasks:** ${stats.total}
-- **Completed:** ${stats.completed}
-- **Pending:** ${stats.pending}
-- **In Progress:** ${stats.inProgress}
-
-`;
-
-    // Show completed tasks for context
-    if (completedTasks.length > 0) {
-      dynamicPrompt += `## Already Completed (DO NOT REDO)\n\n`;
-      for (const task of completedTasks) {
-        dynamicPrompt += `- [x] **${task.id}**: ${task.title}`;
-        if (task.completionSummary) {
-          dynamicPrompt += ` - ${task.completionSummary}`;
-        }
-        dynamicPrompt += "\n";
-      }
-      dynamicPrompt += "\n";
-    }
-
-    // Show the current task to work on
-    if (currentTask) {
-      dynamicPrompt += `## YOUR TASK FOR THIS ITERATION
-
-**Task ID:** \`${currentTask.id}\`
-**Title:** ${currentTask.title}
-`;
-      if (currentTask.description) {
-        dynamicPrompt += `**Description:** ${currentTask.description}\n`;
-      }
-      if (
-        currentTask.acceptanceCriteria &&
-        currentTask.acceptanceCriteria.length > 0
-      ) {
-        dynamicPrompt += `\n**Acceptance Criteria:**\n`;
-        for (const criterion of currentTask.acceptanceCriteria) {
-          dynamicPrompt += `- [ ] ${criterion}\n`;
-        }
-      }
-      if (currentTask.dependsOn && currentTask.dependsOn.length > 0) {
-        dynamicPrompt += `\n**Depends on:** ${currentTask.dependsOn.join(", ")}\n`;
-      }
-      dynamicPrompt += `
-### Instructions
-
-1. Call \`update_task_status\` to mark task \`${currentTask.id}\` as \`in_progress\`
-2. Complete ONLY this task - nothing more, nothing less
-3. When done, call \`update_task_status\` to mark it as \`completed\` with a summary
-4. Call \`signal_iteration_complete\` to end this iteration
-
-**DO NOT** implement any functionality that belongs to other tasks listed below.
-
-`;
-    } else {
-      dynamicPrompt += `## NO AVAILABLE TASKS
-
-All tasks are either completed, blocked, or have unmet dependencies.
-Call \`signal_iteration_complete\` with reason "No available tasks".
-
-`;
-    }
-
-    // Show remaining tasks (DO NOT DO THESE)
-    const remainingTasks = pendingTasks.filter((t) => t.id !== currentTask?.id);
-    if (remainingTasks.length > 0) {
-      dynamicPrompt += `## Remaining Tasks (DO NOT WORK ON THESE YET)
-
-These tasks will be handled in future iterations. Do NOT implement any of these now:
-
-`;
-      for (const task of remainingTasks) {
-        dynamicPrompt += `- [ ] **${task.id}**: ${task.title}\n`;
-      }
-      dynamicPrompt += "\n";
-    }
-
-    // Add the base prompt
-    dynamicPrompt += `---
-
-## Base Instructions
-
-${basePrompt}
-`;
-
-    // Write to temp file
-    const tempDir = path.join(this.projectPath, ".daisy", ".temp");
-    if (!existsSync(tempDir)) {
-      mkdirSync(tempDir, { recursive: true });
-    }
-    const tempPromptPath = path.join(
-      tempDir,
-      `iteration-${iteration}-prompt.md`
+  private getPromptPath(): string {
+    const defaultPromptPath = path.join(
+      this.projectPath,
+      ".daisy",
+      "PROMPT.md"
     );
-    writeFileSync(tempPromptPath, dynamicPrompt, "utf-8");
-
-    return { promptPath: tempPromptPath, currentTask };
+    return this.options.promptPath || defaultPromptPath;
   }
 }
 

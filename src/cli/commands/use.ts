@@ -51,7 +51,9 @@ export const useCommand = new Command("use")
           body: JSON.stringify({ path: absolutePath }),
         });
 
-        const data = await response.json();
+        const data = (await response.json()) as {
+          project: { name: string; path: string; stats: { total: number; pending: number } };
+        };
 
         if (response.ok) {
           spinner.succeed(`Switched to: ${chalk.cyan(data.project.name)}`);

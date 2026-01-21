@@ -10,14 +10,17 @@ import chalk from "chalk";
 import { Command } from "commander";
 import inquirer from "inquirer";
 import ora from "ora";
-import { addKnownProject, setCurrentProject } from "../../storage/global.js";
+import {
+  addKnownProject,
+  setCurrentProject,
+  updateProjectSettings,
+} from "../../storage/global.js";
 import {
   ensureProjectDir,
   isProject,
-  saveConfig,
   saveTasks,
 } from "../../storage/project.js";
-import type { ProjectConfig, Task } from "../../storage/types.js";
+import type { Task } from "../../storage/types.js";
 
 // Legacy format types for migration
 interface LegacySection {
@@ -84,7 +87,6 @@ async function action(
     const projectName = options.name || path.basename(absolutePath);
 
     // Define all paths upfront
-    const configPath = path.join(absolutePath, ".daisy", "config.json");
     const tasksPath = path.join(absolutePath, ".daisy", "tasks.json");
     const promptPath = path.join(absolutePath, ".daisy", "PROMPT.md");
     const plansDir = path.join(absolutePath, ".daisy", "plans");
@@ -93,7 +95,6 @@ async function action(
     const mcpConfigPath = path.join(absolutePath, ".mcp.json");
 
     // Track what actions to take
-    let writeConfig = true;
     let writeTasks = true;
     let writePrompt = true;
     let writeClaudeSettings = true;
@@ -104,15 +105,6 @@ async function action(
       spinner.stop();
       console.log(chalk.yellow("Found existing daisy project."));
       console.log();
-
-      // Check each file and prompt if it exists
-      if (existsSync(configPath)) {
-        const action = await promptForFile(".daisy/config.json", [
-          "keep",
-          "overwrite",
-        ]);
-        writeConfig = action === "overwrite";
-      }
 
       if (existsSync(tasksPath)) {
         const action = await promptForFile(".daisy/tasks.json", [
@@ -159,16 +151,11 @@ async function action(
       mkdirSync(plansDir, { recursive: true });
     }
 
-    // Create or update config
-    if (writeConfig) {
-      const config: ProjectConfig = {
-        loop: {
-          maxIterations: 10,
-          maxAttemptsPerTask: 3,
-        },
-      };
-      saveConfig(absolutePath, config);
-    }
+    // Initialize default settings in global storage
+    updateProjectSettings(absolutePath, {
+      maxIterations: 10,
+      maxAttemptsPerTask: 3,
+    });
 
     // Initialize tasks
     let importedTasks = false;
@@ -255,10 +242,7 @@ async function action(
     }
     console.log(chalk.green("✓"), "Created .daisy directory");
     console.log(chalk.green("✓"), "Created .daisy/plans directory");
-    console.log(
-      writeConfig ? chalk.green("✓") : chalk.yellow("○"),
-      writeConfig ? "Created config.json" : "Kept existing config.json"
-    );
+    console.log(chalk.green("✓"), "Initialized settings in ~/.daisy/");
     console.log(
       writeTasks ? chalk.green("✓") : chalk.yellow("○"),
       writeTasks ? "Created tasks.json" : "Kept existing tasks.json"
